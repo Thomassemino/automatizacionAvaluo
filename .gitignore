@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# Archivos Excel generados (output del script)
+AQUOS FINMEX*.xlsx
+~$*.xlsx
+Valuacion_Completada*.xlsx
+
+# Imagen de prueba
+image.png
+
+# Datos sensibles de clientes
+datos_extraidos_ia.json

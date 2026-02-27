@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avaluos - Revision y Generacion Excel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="bg-grid"></div>
+
+  <main class="layout">
+    <header class="hero card">
+      <p class="eyebrow">Pipeline Humano + IA</p>
+      <h1>Revision financiera y generacion de Excel</h1>
+      <p>
+        Carga el JSON extraido por IA, valida campo por campo, corrige lo necesario y genera
+        el archivo de salida con un solo clic.
+      </p>
+      <p id="templateInfo" class="template-info">Plantilla detectada: cargando...</p>
+    </header>
+
+    <section class="card">
+      <h2>1) Cargar JSON</h2>
+      <p class="muted">Puedes cargar un archivo, usar el ejemplo local o pegar el JSON como texto.</p>
+      <div class="upload-row">
+        <label class="btn primary file-trigger">
+          Seleccionar JSON
+          <input id="fileInput" type="file" accept=".json,application/json">
+        </label>
+        <button id="loadSampleBtn" class="btn ghost" type="button" {{ '' if sample_exists else 'disabled' }}>
+          Cargar ejemplo local
+        </button>
+      </div>
+      <div class="paste-block">
+        <label for="jsonTextInput" class="paste-label">Pegar JSON</label>
+        <textarea
+          id="jsonTextInput"
+          class="json-paste-input"
+          rows="8"
+          placeholder='Pega aqui el JSON completo, por ejemplo: {"metadata": {...}, "datos_financieros": [...]}'
+        ></textarea>
+        <div class="paste-actions">
+          <button id="loadTextBtn" class="btn ghost" type="button">Analizar JSON</button>
+        </div>
+      </div>
+      <p id="selectedFile" class="selected-file muted"></p>
+      <div id="messageBox" class="message hidden"></div>
+    </section>
+
+    <section id="editorSection" class="card hidden">
+      <div class="section-header">
+        <h2>2) Editar y confirmar datos</h2>
+        <button id="addPeriodBtn" class="btn ghost" type="button">Agregar ano</button>
+      </div>
+      <div id="metadataContainer" class="form-block"></div>
+      <div id="periodsContainer" class="form-block"></div>
+      <div id="alertsSummaryContainer" class="form-block"></div>
+    </section>
+
+    <section id="previewSection" class="card hidden">
+      <div class="section-header">
+        <h2>3) Previsualizar hoja "1. Datos"</h2>
+        <button id="refreshPreviewBtn" class="btn ghost" type="button">Actualizar vista</button>
+      </div>
+      <p class="muted">Vista previa del Excel con los datos actuales. Navega por secciones para verificar antes de exportar.</p>
+      <div id="previewNav" class="preview-nav">
+        <button class="btn ghost small preview-jump" data-target="preview-er">Estado de Resultados</button>
+        <button class="btn ghost small preview-jump" data-target="preview-bg">Balance General</button>
+      </div>
+      <div id="previewStatus" class="message hidden"></div>
+      <div class="preview-wrap" id="previewWrap">
+        <div id="previewTableContainer"></div>
+      </div>
+    </section>
+
+    <section id="actionsSection" class="card hidden">
+      <h2>4) Ejecutar llenado y descargar</h2>
+      <p class="muted">Al confirmar, se ejecuta el llenado del Excel con los datos que acabas de validar.</p>
+      <div class="action-row">
+        <button id="generateBtn" class="btn primary" type="button">Confirmar datos y generar Excel</button>
+        <a id="downloadLink" class="btn success hidden" href="#" download>Descargar Excel</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>
