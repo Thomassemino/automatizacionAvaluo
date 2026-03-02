@@ -389,6 +389,7 @@ h2 {
 .preview-static-block {
   display: grid;
   gap: 6px;
+  margin-bottom: 40px;
 }
 
 .preview-static-title {

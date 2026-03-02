@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" href="https://anepsaglobal.com/wp-content/uploads/2023/09/iconAnepsa.png" type="image/png">
 </head>
 <body>
   <div class="bg-gradient"></div>
@@ -21,7 +22,6 @@
         Carga el JSON extraido por IA, valida campo por campo, corrige lo necesario y genera
         el archivo de salida con un solo clic.
       </p>
-      <p id="templateInfo" class="template-info">Plantilla detectada: cargando...</p>
     </header>
 
     <section class="card">
@@ -32,9 +32,6 @@
           Seleccionar JSON
           <input id="fileInput" type="file" accept=".json,application/json">
         </label>
-        <button id="loadSampleBtn" class="btn ghost" type="button" {{ '' if sample_exists else 'disabled' }}>
-          Cargar ejemplo local
-        </button>
       </div>
       <div class="paste-block">
         <label for="jsonTextInput" class="paste-label">Pegar JSON</label>
@@ -55,7 +52,7 @@
     <section id="editorSection" class="card hidden">
       <div class="section-header">
         <h2>2) Editar y confirmar datos</h2>
-        <button id="addPeriodBtn" class="btn ghost" type="button">Agregar ano</button>
+        <button id="addPeriodBtn" class="btn ghost" type="button">Agregar año</button>
       </div>
       <div id="metadataContainer" class="form-block"></div>
       <div id="periodsContainer" class="form-block"></div>
