@@ -1,6 +1,5 @@
 const els = {
   fileInput: document.getElementById("fileInput"),
-  loadSampleBtn: document.getElementById("loadSampleBtn"),
   jsonTextInput: document.getElementById("jsonTextInput"),
   loadTextBtn: document.getElementById("loadTextBtn"),
   selectedFile: document.getElementById("selectedFile"),
@@ -39,7 +38,7 @@ const metadataFields = [
     path: "periodos_encontrados",
     label: "Periodos encontrados",
     type: "years",
-    help: "Lista de anos fiscales unicos detectados en el lote procesado. Escribe anos separados por coma.",
+    help: "Lista de años fiscales unicos detectados en el lote procesado. Escribe años separados por coma.",
   },
 ];
 
@@ -51,7 +50,7 @@ const periodFieldGroups = [
         path: "anio",
         label: "Anio fiscal",
         type: "integer",
-        help: "Ano fiscal especifico extraido de la columna de fecha.",
+        help: "Año fiscal especifico extraido de la columna de fecha.",
       },
       {
         path: "tipo_periodo",
@@ -642,7 +641,7 @@ function renderPeriods() {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "btn small danger";
-    removeBtn.textContent = "Eliminar ano";
+    removeBtn.textContent = "Eliminar año";
     removeBtn.addEventListener("click", () => {
       appState.datos_financieros.splice(index, 1);
       if (appState.datos_financieros.length === 0) {
@@ -723,7 +722,7 @@ function renderAlertsSummary() {
 
       const heading = document.createElement("p");
       heading.className = "alert-summary-year";
-      heading.textContent = `Ano ${period.anio}`;
+      heading.textContent = `Año ${period.anio}`;
       item.appendChild(heading);
 
       const text = document.createElement("p");
@@ -1065,7 +1064,6 @@ async function generateExcel() {
 
 function bindEvents() {
   els.fileInput.addEventListener("change", handleFileSelection);
-  els.loadSampleBtn.addEventListener("click", loadSampleData);
   els.loadTextBtn.addEventListener("click", handleTextLoad);
   els.jsonTextInput.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
