@@ -1,4 +1,4 @@
-const els = {
+﻿const els = {
   fileInput: document.getElementById("fileInput"),
   jsonTextInput: document.getElementById("jsonTextInput"),
   loadTextBtn: document.getElementById("loadTextBtn"),
@@ -38,7 +38,7 @@ const metadataFields = [
     path: "periodos_encontrados",
     label: "Periodos encontrados",
     type: "years",
-    help: "Lista de años fiscales unicos detectados en el lote procesado. Escribe años separados por coma.",
+    help: "Lista de aÃ±os fiscales unicos detectados en el lote procesado. Escribe aÃ±os separados por coma.",
   },
 ];
 
@@ -50,204 +50,384 @@ const periodFieldGroups = [
         path: "anio",
         label: "Anio fiscal",
         type: "integer",
-        help: "Año fiscal especifico extraido de la columna de fecha.",
+        help: "Ano fiscal detectado en el documento.",
       },
       {
         path: "tipo_periodo",
         label: "Tipo de periodo",
         type: "select",
         options: ["ANUAL_CERRADO", "PARCIAL"],
-        help: "ANUAL_CERRADO si cubre enero-diciembre. PARCIAL si corta antes (por ejemplo, octubre).",
+        help: "ANUAL_CERRADO para enero-diciembre; PARCIAL para cortes intermedios.",
       },
     ],
   },
   {
-    title: "B. Estado de resultados (flujo acumulado)",
+    title: "B. Estado de resultados",
     fields: [
       {
-        path: "estado_resultados.ventas_netas",
-        label: "Ventas netas",
+        path: "estado_resultados.ingresos_operativos_netos",
+        label: "Ingresos operativos netos",
         type: "number",
-        help: "Suma acumulada anual de Ingresos, Ventas o Servicios.",
+        help: "Ventas o ingresos netos operativos del periodo.",
       },
       {
-        path: "estado_resultados.costo_ventas",
+        path: "estado_resultados.devoluciones_y_descuentos_sobre_ventas",
+        label: "Devoluciones y descuentos",
+        type: "number",
+        help: "Devoluciones, rebajas o descuentos sobre ventas.",
+      },
+      {
+        path: "estado_resultados.costo_de_ventas",
         label: "Costo de ventas",
         type: "number",
-        help: "Costos directos del servicio/producto. Puede ser 0 si se carga a gastos operativos.",
+        help: "Costo de lo vendido o costo directo.",
       },
       {
         path: "estado_resultados.utilidad_bruta",
         label: "Utilidad bruta",
         type: "number",
-        help: "Calculo esperado: Ventas Netas - Costo de Ventas.",
+        help: "Ingresos operativos netos menos costo de ventas.",
       },
       {
-        path: "estado_resultados.gastos_operativos_totales",
-        label: "Gastos operativos totales",
+        path: "estado_resultados.gastos_operativos",
+        label: "Gastos de operacion",
         type: "number",
-        help: "Suma de gastos de administracion, venta y generales; se guardan como magnitud positiva.",
+        help: "Gasto operativo general (si aplica).",
+      },
+      {
+        path: "estado_resultados.gastos_generales",
+        label: "Gastos generales",
+        type: "number",
+        help: "Gastos generales del periodo.",
+      },
+      {
+        path: "estado_resultados.gastos_de_administracion",
+        label: "Gastos de administracion",
+        type: "number",
+        help: "Gastos administrativos del periodo.",
+      },
+      {
+        path: "estado_resultados.gastos_de_venta",
+        label: "Gastos de venta",
+        type: "number",
+        help: "Gastos comerciales o de distribucion.",
+      },
+      {
+        path: "estado_resultados.gastos_de_personal",
+        label: "Gastos de personal",
+        type: "number",
+        help: "Nomina y prestaciones.",
+      },
+      {
+        path: "estado_resultados.gastos_por_arrendamientos",
+        label: "Gastos por arrendamientos",
+        type: "number",
+        help: "Rentas o arrendamientos del periodo.",
+      },
+      {
+        path: "estado_resultados.servicios_externos_y_honorarios",
+        label: "Servicios externos",
+        type: "number",
+        help: "Honorarios y servicios de terceros.",
+      },
+      {
+        path: "estado_resultados.otros_ingresos_operativos",
+        label: "Otros ingresos operativos",
+        type: "number",
+        help: "Ingresos operativos no recurrentes o accesorios.",
+      },
+      {
+        path: "estado_resultados.otros_gastos_operativos",
+        label: "Otros gastos operativos",
+        type: "number",
+        help: "Gastos operativos no recurrentes.",
+      },
+      {
+        path: "estado_resultados.ebitda",
+        label: "EBITDA",
+        type: "number",
+        help: "Resultado antes de intereses, impuestos, depreciacion y amortizacion.",
+      },
+      {
+        path: "estado_resultados.depreciacion_del_periodo",
+        label: "Depreciacion del periodo",
+        type: "number",
+        help: "Depreciacion reconocida en resultados.",
+      },
+      {
+        path: "estado_resultados.amortizacion_del_periodo",
+        label: "Amortizacion del periodo",
+        type: "number",
+        help: "Amortizacion reconocida en resultados.",
+      },
+      {
+        path: "estado_resultados.depreciacion_y_amortizacion",
+        label: "Depreciacion y amortizacion",
+        type: "number",
+        help: "Total de depreciacion y amortizacion.",
+      },
+      {
+        path: "estado_resultados.resultado_financiero_neto",
+        label: "Resultado financiero neto",
+        type: "number",
+        help: "RIF o neto financiero.",
+      },
+      {
+        path: "estado_resultados.ingresos_financieros",
+        label: "Ingresos financieros",
+        type: "number",
+        help: "Intereses ganados y productos financieros.",
+      },
+      {
+        path: "estado_resultados.gastos_financieros",
+        label: "Gastos financieros",
+        type: "number",
+        help: "Intereses pagados y costos financieros.",
+      },
+      {
+        path: "estado_resultados.otros_ingresos_no_operativos",
+        label: "Otros ingresos no operativos",
+        type: "number",
+        help: "Ingresos no operativos o extraordinarios.",
+      },
+      {
+        path: "estado_resultados.otros_gastos_no_operativos",
+        label: "Otros gastos no operativos",
+        type: "number",
+        help: "Gastos no operativos o extraordinarios.",
       },
       {
         path: "estado_resultados.utilidad_operativa_ebit",
-        label: "Utilidad operativa (EBIT)",
+        label: "Utilidad operativa EBIT",
         type: "number",
-        help: "Dato clave de valuacion. Calculo esperado: Utilidad Bruta - Gastos Operativos.",
+        help: "Resultado operativo (EBIT).",
       },
       {
-        path: "estado_resultados.depreciacion_amortizacion_periodo",
-        label: "Depreciacion y amortizacion del periodo",
+        path: "estado_resultados.utilidad_antes_de_impuestos",
+        label: "Utilidad antes de impuestos",
         type: "number",
-        help: "Partida de depreciacion del ejercicio. Si no aparece explicita, se deja en 0.0.",
+        help: "Resultado antes de ISR/PTU.",
       },
       {
-        path: "estado_resultados.otros_ingresos_gastos_neto",
-        label: "Otros ingresos/gastos neto",
+        path: "estado_resultados.isr_diferido",
+        label: "ISR diferido",
         type: "number",
-        help: "Partidas no operativas. Negativo = gasto extraordinario; positivo = ingreso ajeno al giro.",
+        help: "Impuesto diferido del periodo.",
       },
       {
-        path: "estado_resultados.resultado_integral_financiamiento",
-        label: "Resultado integral de financiamiento (RIF)",
+        path: "estado_resultados.isr_corriente",
+        label: "ISR corriente",
         type: "number",
-        help: "Intereses pagados/ganados y efecto cambiario.",
+        help: "ISR del ejercicio.",
       },
       {
-        path: "estado_resultados.impuestos",
-        label: "Impuestos",
+        path: "estado_resultados.provision_ptu",
+        label: "Provision PTU",
         type: "number",
-        help: "ISR y PTU del ejercicio.",
+        help: "Provision de participacion a trabajadores.",
+      },
+      {
+        path: "estado_resultados.total_impuestos_generico",
+        label: "Total impuestos generico",
+        type: "number",
+        help: "Usar solo cuando el origen no separa impuestos.",
+      },
+      {
+        path: "estado_resultados.impuesto_a_la_utilidad",
+        label: "Impuesto a la utilidad",
+        type: "number",
+        help: "Impuesto total del periodo cuando venga identificado.",
       },
       {
         path: "estado_resultados.utilidad_neta",
         label: "Utilidad neta",
         type: "number",
-        help: "Resultado final del ejercicio (bottom line).",
+        help: "Resultado final del ejercicio.",
       },
     ],
   },
   {
-    title: "C. Balance general (foto al cierre)",
+    title: "C. Balance general",
     fields: [
       {
         path: "balance_general.activos.circulante.efectivo_y_equivalentes",
         label: "Efectivo y equivalentes",
         type: "number",
-        help: "Suma de Caja + Bancos + Inversiones temporales al cierre.",
+        help: "Caja, bancos e inversiones temporales.",
       },
       {
         path: "balance_general.activos.circulante.cuentas_por_cobrar_clientes",
-        label: "Cuentas por cobrar clientes",
+        label: "Cuentas por cobrar",
         type: "number",
-        help: "Clientes comerciales al cierre.",
+        help: "Clientes comerciales.",
       },
       {
-        path: "balance_general.activos.circulante.impuestos_a_favor",
-        label: "Impuestos a favor",
+        path: "balance_general.activos.circulante.impuestos_a_favor_cp",
+        label: "Impuestos a favor CP",
         type: "number",
-        help: "IVA acreditable, ISR a favor y similares.",
+        help: "Saldos a favor de impuestos de corto plazo.",
       },
       {
-        path: "balance_general.activos.circulante.deudores_diversos",
-        label: "Deudores diversos",
+        path: "balance_general.activos.circulante.deudores_diversos_cp",
+        label: "Deudores diversos CP",
         type: "number",
-        help: "Cuentas por cobrar no comerciales.",
+        help: "Cuentas por cobrar no comerciales de corto plazo.",
+      },
+      {
+        path: "balance_general.activos.circulante.inventarios",
+        label: "Inventarios",
+        type: "number",
+        help: "Existencias al cierre.",
       },
       {
         path: "balance_general.activos.circulante.pagos_anticipados",
         label: "Pagos anticipados",
         type: "number",
-        help: "Seguros, rentas u otros pagos prepagados.",
+        help: "Rentas, seguros y otros prepagados.",
       },
       {
         path: "balance_general.activos.circulante.otros_activos_circulantes",
         label: "Otros activos circulantes",
         type: "number",
-        help: "Activos circulantes que no encajan en rubros principales.",
+        help: "Activos circulantes no clasificados.",
       },
       {
         path: "balance_general.activos.circulante.total_activo_circulante",
         label: "Total activo circulante",
         type: "number",
-        help: "Suma de los activos circulantes.",
+        help: "Total de activo circulante.",
       },
       {
-        path: "balance_general.activos.no_circulante.propiedad_planta_equipo_bruto",
-        label: "Propiedad, planta y equipo bruto",
+        path: "balance_general.activos.no_circulante.equipo_de_transporte",
+        label: "Equipo de transporte",
         type: "number",
-        help: "Valor original de activos fijos (mobiliario, equipo, etc.).",
+        help: "Vehiculos y flota.",
       },
       {
-        path: "balance_general.activos.no_circulante.depreciacion_acumulada",
+        path: "balance_general.activos.no_circulante.equipo_de_computo",
+        label: "Equipo de computo",
+        type: "number",
+        help: "Hardware y TI.",
+      },
+      {
+        path: "balance_general.activos.no_circulante.mobiliario_y_equipo_de_oficina",
+        label: "Mobiliario y equipo",
+        type: "number",
+        help: "Muebles y equipo de oficina.",
+      },
+      {
+        path: "balance_general.activos.no_circulante.propiedad_planta_y_equipo_neto",
+        label: "PP&E neto",
+        type: "number",
+        help: "Propiedad, planta y equipo neto.",
+      },
+      {
+        path: "balance_general.activos.no_circulante.depreciacion_acumulada_historica",
         label: "Depreciacion acumulada",
         type: "number",
-        help: "Valor negativo del desgaste historico acumulado, tomado del balance.",
+        help: "Depreciacion historica acumulada.",
+      },
+      {
+        path: "balance_general.activos.no_circulante.activos_intangibles_neto",
+        label: "Activos intangibles neto",
+        type: "number",
+        help: "Intangibles netos al cierre.",
       },
       {
         path: "balance_general.activos.no_circulante.activos_diferidos",
         label: "Activos diferidos",
         type: "number",
-        help: "Partidas diferidas de largo plazo.",
+        help: "Activos diferidos de largo plazo.",
       },
       {
         path: "balance_general.activos.no_circulante.total_activo_no_circulante",
         label: "Total activo no circulante",
         type: "number",
-        help: "Suma de activos no circulantes.",
+        help: "Total de activo no circulante.",
       },
       {
         path: "balance_general.activos.total_activos",
         label: "Total activos",
         type: "number",
-        help: "Total de activos. Debe cuadrar con Pasivo + Capital.",
+        help: "Total del activo.",
       },
       {
-        path: "balance_general.pasivos.corto_plazo.proveedores_cuentas_por_pagar",
-        label: "Proveedores / cuentas por pagar",
+        path: "balance_general.pasivos.corto_plazo.proveedores",
+        label: "Proveedores",
         type: "number",
-        help: "Deuda operativa con proveedores.",
+        help: "Pasivo con proveedores.",
       },
       {
-        path: "balance_general.pasivos.corto_plazo.impuestos_por_pagar",
-        label: "Impuestos por pagar",
+        path: "balance_general.pasivos.corto_plazo.deuda_financiera_cp",
+        label: "Deuda financiera CP",
         type: "number",
-        help: "IVA trasladado, ISR por pagar y retenciones.",
+        help: "Pasivos financieros de corto plazo.",
+      },
+      {
+        path: "balance_general.pasivos.corto_plazo.impuestos_y_cuotas_por_pagar",
+        label: "Impuestos y cuotas por pagar",
+        type: "number",
+        help: "Obligaciones fiscales por pagar.",
+      },
+      {
+        path: "balance_general.pasivos.corto_plazo.anticipo_de_clientes",
+        label: "Anticipo de clientes",
+        type: "number",
+        help: "Cobros anticipados de clientes.",
       },
       {
         path: "balance_general.pasivos.corto_plazo.acreedores_diversos",
         label: "Acreedores diversos",
         type: "number",
-        help: "Otros acreedores de corto plazo.",
+        help: "Otros acreedores operativos.",
       },
       {
         path: "balance_general.pasivos.corto_plazo.provisiones",
         label: "Provisiones",
         type: "number",
-        help: "Reservas para obligaciones futuras.",
+        help: "Provisiones del periodo.",
       },
       {
         path: "balance_general.pasivos.corto_plazo.otros_pasivos_corto_plazo",
-        label: "Otros pasivos corto plazo",
+        label: "Otros pasivos CP",
         type: "number",
-        help: "Pasivos de corto plazo que no encajan en rubros previos.",
+        help: "Pasivos de corto plazo no clasificados.",
       },
       {
         path: "balance_general.pasivos.corto_plazo.total_pasivo_corto_plazo",
-        label: "Total pasivo corto plazo",
+        label: "Total pasivo CP",
         type: "number",
-        help: "Suma del pasivo exigible a corto plazo.",
+        help: "Total pasivo corto plazo.",
+      },
+      {
+        path: "balance_general.pasivos.largo_plazo.dividendos_decretados",
+        label: "Dividendos decretados",
+        type: "number",
+        help: "Dividendos por pagar.",
+      },
+      {
+        path: "balance_general.pasivos.largo_plazo.pasivo_por_arrendamiento",
+        label: "Pasivo por arrendamiento",
+        type: "number",
+        help: "Arrendamientos de largo plazo.",
+      },
+      {
+        path: "balance_general.pasivos.largo_plazo.deuda_financiera_lp",
+        label: "Deuda financiera LP",
+        type: "number",
+        help: "Pasivos financieros de largo plazo.",
       },
       {
         path: "balance_general.pasivos.largo_plazo.total_pasivo_largo_plazo",
-        label: "Total pasivo largo plazo",
+        label: "Total pasivo LP",
         type: "number",
-        help: "Suma del pasivo de largo plazo.",
+        help: "Total pasivo largo plazo.",
       },
       {
         path: "balance_general.pasivos.total_pasivos",
         label: "Total pasivos",
         type: "number",
-        help: "Total de deudas (corto + largo plazo).",
+        help: "Suma de pasivos CP y LP.",
       },
       {
         path: "balance_general.capital_contable.capital_social",
@@ -256,28 +436,33 @@ const periodFieldGroups = [
         help: "Aportaciones de socios.",
       },
       {
-        path: "balance_general.capital_contable.utilidades_acumuladas",
-        label: "Utilidades acumuladas",
+        path: "balance_general.capital_contable.utilidades_ejercicios_anteriores",
+        label: "Utilidades ejercicios anteriores",
         type: "number",
-        help: "Resultados acumulados de ejercicios anteriores.",
+        help: "Resultados acumulados.",
       },
       {
-        path: "balance_general.capital_contable.resultado_ejercicio_balance",
-        label: "Resultado del ejercicio (balance)",
+        path: "balance_general.capital_contable.resultado_del_ejercicio_balance",
+        label: "Resultado del ejercicio",
         type: "number",
-        help: "Debe coincidir con utilidad_neta del estado de resultados.",
+        help: "Resultado del ejercicio en balance.",
       },
       {
         path: "balance_general.capital_contable.total_capital_contable",
         label: "Total capital contable",
         type: "number",
-        help: "Calculo esperado: Total Activos - Total Pasivos.",
+        help: "Total de capital contable.",
       },
+    ],
+  },
+  {
+    title: "D. Alertas",
+    fields: [
       {
         path: "alertaDeAI",
         label: "Alerta de IA",
         type: "textarea",
-        help: "Autodiagnostico de la IA sobre ecuacion contable, periodos incompletos o capital negativo.",
+        help: "Observaciones de auditoria y validaciones contables.",
       },
     ],
   },
@@ -303,15 +488,35 @@ function createDefaultPeriod(year = new Date().getFullYear()) {
     anio: year,
     tipo_periodo: "ANUAL_CERRADO",
     estado_resultados: {
-      ventas_netas: 0,
-      costo_ventas: 0,
+      ingresos_operativos_netos: 0,
+      devoluciones_y_descuentos_sobre_ventas: 0,
+      costo_de_ventas: 0,
       utilidad_bruta: 0,
-      gastos_operativos_totales: 0,
+      gastos_de_venta: 0,
+      gastos_de_administracion: 0,
+      gastos_generales: 0,
+      gastos_operativos: 0,
+      gastos_de_personal: 0,
+      gastos_por_arrendamientos: 0,
+      servicios_externos_y_honorarios: 0,
+      otros_ingresos_operativos: 0,
+      otros_gastos_operativos: 0,
+      ebitda: 0,
+      depreciacion_del_periodo: 0,
+      amortizacion_del_periodo: 0,
+      depreciacion_y_amortizacion: 0,
       utilidad_operativa_ebit: 0,
-      depreciacion_amortizacion_periodo: 0,
-      otros_ingresos_gastos_neto: 0,
-      resultado_integral_financiamiento: 0,
-      impuestos: 0,
+      ingresos_financieros: 0,
+      gastos_financieros: 0,
+      resultado_financiero_neto: 0,
+      otros_ingresos_no_operativos: 0,
+      otros_gastos_no_operativos: 0,
+      utilidad_antes_de_impuestos: 0,
+      isr_diferido: 0,
+      isr_corriente: 0,
+      provision_ptu: 0,
+      total_impuestos_generico: 0,
+      impuesto_a_la_utilidad: 0,
       utilidad_neta: 0,
     },
     balance_general: {
@@ -319,15 +524,20 @@ function createDefaultPeriod(year = new Date().getFullYear()) {
         circulante: {
           efectivo_y_equivalentes: 0,
           cuentas_por_cobrar_clientes: 0,
-          impuestos_a_favor: 0,
-          deudores_diversos: 0,
+          impuestos_a_favor_cp: 0,
+          deudores_diversos_cp: 0,
+          inventarios: 0,
           pagos_anticipados: 0,
           otros_activos_circulantes: 0,
           total_activo_circulante: 0,
         },
         no_circulante: {
-          propiedad_planta_equipo_bruto: 0,
-          depreciacion_acumulada: 0,
+          equipo_de_transporte: 0,
+          equipo_de_computo: 0,
+          mobiliario_y_equipo_de_oficina: 0,
+          propiedad_planta_y_equipo_neto: 0,
+          depreciacion_acumulada_historica: 0,
+          activos_intangibles_neto: 0,
           activos_diferidos: 0,
           total_activo_no_circulante: 0,
         },
@@ -335,22 +545,27 @@ function createDefaultPeriod(year = new Date().getFullYear()) {
       },
       pasivos: {
         corto_plazo: {
-          proveedores_cuentas_por_pagar: 0,
-          impuestos_por_pagar: 0,
+          proveedores: 0,
+          deuda_financiera_cp: 0,
+          impuestos_y_cuotas_por_pagar: 0,
+          anticipo_de_clientes: 0,
           acreedores_diversos: 0,
           provisiones: 0,
           otros_pasivos_corto_plazo: 0,
           total_pasivo_corto_plazo: 0,
         },
         largo_plazo: {
+          deuda_financiera_lp: 0,
+          pasivo_por_arrendamiento: 0,
+          dividendos_decretados: 0,
           total_pasivo_largo_plazo: 0,
         },
         total_pasivos: 0,
       },
       capital_contable: {
         capital_social: 0,
-        utilidades_acumuladas: 0,
-        resultado_ejercicio_balance: 0,
+        utilidades_ejercicios_anteriores: 0,
+        resultado_del_ejercicio_balance: 0,
         total_capital_contable: 0,
       },
     },
@@ -641,7 +856,7 @@ function renderPeriods() {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "btn small danger";
-    removeBtn.textContent = "Eliminar año";
+    removeBtn.textContent = "Eliminar aÃ±o";
     removeBtn.addEventListener("click", () => {
       appState.datos_financieros.splice(index, 1);
       if (appState.datos_financieros.length === 0) {
@@ -702,7 +917,7 @@ function renderAlertsSummary() {
   card.className = "subcard";
 
   const title = document.createElement("h3");
-  title.textContent = "Resumen final de alertas por año";
+  title.textContent = "Resumen final de alertas por aÃ±o";
   card.appendChild(title);
 
   const subtitle = document.createElement("p");
@@ -722,7 +937,7 @@ function renderAlertsSummary() {
 
       const heading = document.createElement("p");
       heading.className = "alert-summary-year";
-      heading.textContent = `Año ${period.anio}`;
+      heading.textContent = `AÃ±o ${period.anio}`;
       item.appendChild(heading);
 
       const text = document.createElement("p");
@@ -777,18 +992,50 @@ function renderPreviewStatic() {
   }
 
   function getVal(p, row) {
-    if (row.special === "otros_gastos") {
-      const v = toNumber(readPath(p, "estado_resultados.otros_ingresos_gastos_neto"), 0);
-      return v < 0 ? Math.abs(v) : 0;
-    }
-    if (row.special === "otros_ingresos") {
-      const v = toNumber(readPath(p, "estado_resultados.otros_ingresos_gastos_neto"), 0);
-      return v >= 0 ? v : 0;
-    }
     if (row.special === "pasivo_capital") {
       return (
         toNumber(readPath(p, "balance_general.pasivos.total_pasivos"), 0) +
         toNumber(readPath(p, "balance_general.capital_contable.total_capital_contable"), 0)
+      );
+    }
+    if (row.special === "activo_circulante_calc") {
+      return (
+        toNumber(readPath(p, "balance_general.activos.circulante.efectivo_y_equivalentes"), 0) +
+        toNumber(readPath(p, "balance_general.activos.circulante.cuentas_por_cobrar_clientes"), 0) +
+        toNumber(readPath(p, "balance_general.activos.circulante.impuestos_a_favor_cp"), 0) +
+        toNumber(readPath(p, "balance_general.activos.circulante.deudores_diversos_cp"), 0) +
+        toNumber(readPath(p, "balance_general.activos.circulante.inventarios"), 0) +
+        toNumber(readPath(p, "balance_general.activos.circulante.pagos_anticipados"), 0) +
+        toNumber(readPath(p, "balance_general.activos.circulante.otros_activos_circulantes"), 0)
+      );
+    }
+    if (row.special === "activo_no_circulante_calc") {
+      return (
+        toNumber(readPath(p, "balance_general.activos.no_circulante.equipo_de_transporte"), 0) +
+        toNumber(readPath(p, "balance_general.activos.no_circulante.equipo_de_computo"), 0) +
+        toNumber(readPath(p, "balance_general.activos.no_circulante.mobiliario_y_equipo_de_oficina"), 0) +
+        toNumber(readPath(p, "balance_general.activos.no_circulante.propiedad_planta_y_equipo_neto"), 0) +
+        toNumber(readPath(p, "balance_general.activos.no_circulante.depreciacion_acumulada_historica"), 0) +
+        toNumber(readPath(p, "balance_general.activos.no_circulante.activos_intangibles_neto"), 0) +
+        toNumber(readPath(p, "balance_general.activos.no_circulante.activos_diferidos"), 0)
+      );
+    }
+    if (row.special === "pasivo_cp_calc") {
+      return (
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.proveedores"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.deuda_financiera_cp"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.impuestos_y_cuotas_por_pagar"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.anticipo_de_clientes"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.acreedores_diversos"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.provisiones"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.corto_plazo.otros_pasivos_corto_plazo"), 0)
+      );
+    }
+    if (row.special === "pasivo_lp_calc") {
+      return (
+        toNumber(readPath(p, "balance_general.pasivos.largo_plazo.deuda_financiera_lp"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.largo_plazo.pasivo_por_arrendamiento"), 0) +
+        toNumber(readPath(p, "balance_general.pasivos.largo_plazo.dividendos_decretados"), 0)
       );
     }
     return toNumber(readPath(p, row.path), 0);
@@ -850,48 +1097,61 @@ function renderPreviewStatic() {
   }
 
   const erRows = [
-    { label: "Ventas Netas",              path: "estado_resultados.ventas_netas",                        total: true },
-    { label: "Costo de Ventas",           path: "estado_resultados.costo_ventas" },
-    { label: "UTILIDAD BRUTA",            path: "estado_resultados.utilidad_bruta",                      total: true },
-    { label: "Costos y Gastos",           path: "estado_resultados.gastos_operativos_totales",           total: true },
-    { label: "UTILIDAD OPERACION (EBIT)", path: "estado_resultados.utilidad_operativa_ebit",             total: true },
-    { label: "Otros Gastos",              special: "otros_gastos" },
-    { label: "Otros Ingresos",            special: "otros_ingresos" },
-    { label: "RIF",                       path: "estado_resultados.resultado_integral_financiamiento" },
-    { label: "Impuestos",                 path: "estado_resultados.impuestos" },
-    { label: "UTILIDAD NETA",             path: "estado_resultados.utilidad_neta",                       total: true },
-    { label: "Depreciacion periodo",      path: "estado_resultados.depreciacion_amortizacion_periodo" },
+    { label: "Ingresos operativos netos", path: "estado_resultados.ingresos_operativos_netos", total: true },
+    { label: "Costo de ventas", path: "estado_resultados.costo_de_ventas" },
+    { label: "Utilidad bruta", path: "estado_resultados.utilidad_bruta", total: true },
+    { label: "Gastos de operacion", path: "estado_resultados.gastos_operativos" },
+    { label: "Gastos generales", path: "estado_resultados.gastos_generales" },
+    { label: "Gastos de administracion", path: "estado_resultados.gastos_de_administracion" },
+    { label: "Gastos de venta", path: "estado_resultados.gastos_de_venta" },
+    { label: "Gastos de personal", path: "estado_resultados.gastos_de_personal" },
+    { label: "Utilidad operativa (EBIT)", path: "estado_resultados.utilidad_operativa_ebit", total: true },
+    { label: "Resultado financiero neto", path: "estado_resultados.resultado_financiero_neto" },
+    { label: "Utilidad antes de impuestos", path: "estado_resultados.utilidad_antes_de_impuestos" },
+    { label: "ISR diferido", path: "estado_resultados.isr_diferido" },
+    { label: "ISR corriente", path: "estado_resultados.isr_corriente" },
+    { label: "Provision PTU", path: "estado_resultados.provision_ptu" },
+    { label: "Total impuestos generico", path: "estado_resultados.total_impuestos_generico" },
+    { label: "Utilidad neta", path: "estado_resultados.utilidad_neta", total: true },
   ];
 
   const bgRows = [
     { separator: "ACTIVO" },
-    { label: "Activo Circulante",        path: "balance_general.activos.circulante.total_activo_circulante",        total: true },
-    { label: "  Efectivo",               path: "balance_general.activos.circulante.efectivo_y_equivalentes" },
-    { label: "  Cuentas por cobrar",     path: "balance_general.activos.circulante.cuentas_por_cobrar_clientes" },
-    { label: "  Impuestos a favor",      path: "balance_general.activos.circulante.impuestos_a_favor" },
-    { label: "  Deudores diversos",      path: "balance_general.activos.circulante.deudores_diversos" },
-    { label: "  Pagos anticipados",      path: "balance_general.activos.circulante.pagos_anticipados" },
-    { label: "  Otros circulantes",      path: "balance_general.activos.circulante.otros_activos_circulantes" },
-    { label: "Activo No Circulante",     path: "balance_general.activos.no_circulante.total_activo_no_circulante",  total: true },
-    { label: "  PPE Bruto",              path: "balance_general.activos.no_circulante.propiedad_planta_equipo_bruto" },
-    { label: "  Depreciacion acumulada", path: "balance_general.activos.no_circulante.depreciacion_acumulada" },
-    { label: "  Activos diferidos",      path: "balance_general.activos.no_circulante.activos_diferidos" },
-    { label: "TOTAL ACTIVOS",            path: "balance_general.activos.total_activos",                             total: true },
+    { label: "Activo Circulante", special: "activo_circulante_calc", total: true },
+    { label: "  Efectivo", path: "balance_general.activos.circulante.efectivo_y_equivalentes" },
+    { label: "  Cuentas por cobrar", path: "balance_general.activos.circulante.cuentas_por_cobrar_clientes" },
+    { label: "  Impuestos a favor CP", path: "balance_general.activos.circulante.impuestos_a_favor_cp" },
+    { label: "  Deudores diversos CP", path: "balance_general.activos.circulante.deudores_diversos_cp" },
+    { label: "  Inventarios", path: "balance_general.activos.circulante.inventarios" },
+    { label: "  Pagos anticipados", path: "balance_general.activos.circulante.pagos_anticipados" },
+    { label: "  Otros circulantes", path: "balance_general.activos.circulante.otros_activos_circulantes" },
+    { label: "Activo No Circulante", special: "activo_no_circulante_calc", total: true },
+    { label: "  Equipo de transporte", path: "balance_general.activos.no_circulante.equipo_de_transporte" },
+    { label: "  Equipo de computo", path: "balance_general.activos.no_circulante.equipo_de_computo" },
+    { label: "  Mobiliario y equipo", path: "balance_general.activos.no_circulante.mobiliario_y_equipo_de_oficina" },
+    { label: "  Depreciacion acumulada", path: "balance_general.activos.no_circulante.depreciacion_acumulada_historica" },
+    { label: "  Activos diferidos", path: "balance_general.activos.no_circulante.activos_diferidos" },
+    { label: "TOTAL ACTIVOS", path: "balance_general.activos.total_activos", total: true },
     { separator: "PASIVO" },
-    { label: "Pasivo Corto Plazo",       path: "balance_general.pasivos.corto_plazo.total_pasivo_corto_plazo",      total: true },
-    { label: "  Proveedores",            path: "balance_general.pasivos.corto_plazo.proveedores_cuentas_por_pagar" },
-    { label: "  Impuestos por pagar",    path: "balance_general.pasivos.corto_plazo.impuestos_por_pagar" },
-    { label: "  Acreedores diversos",    path: "balance_general.pasivos.corto_plazo.acreedores_diversos" },
-    { label: "  Provisiones",            path: "balance_general.pasivos.corto_plazo.provisiones" },
-    { label: "  Otros pasivos CP",       path: "balance_general.pasivos.corto_plazo.otros_pasivos_corto_plazo" },
-    { label: "Pasivo Largo Plazo",       path: "balance_general.pasivos.largo_plazo.total_pasivo_largo_plazo",      total: true },
-    { label: "TOTAL PASIVOS",            path: "balance_general.pasivos.total_pasivos",                             total: true },
+    { label: "Pasivo Corto Plazo", special: "pasivo_cp_calc", total: true },
+    { label: "  Proveedores", path: "balance_general.pasivos.corto_plazo.proveedores" },
+    { label: "  Deuda financiera CP", path: "balance_general.pasivos.corto_plazo.deuda_financiera_cp" },
+    { label: "  Impuestos y cuotas por pagar", path: "balance_general.pasivos.corto_plazo.impuestos_y_cuotas_por_pagar" },
+    { label: "  Anticipo de clientes", path: "balance_general.pasivos.corto_plazo.anticipo_de_clientes" },
+    { label: "  Acreedores diversos", path: "balance_general.pasivos.corto_plazo.acreedores_diversos" },
+    { label: "  Provisiones", path: "balance_general.pasivos.corto_plazo.provisiones" },
+    { label: "  Otros pasivos CP", path: "balance_general.pasivos.corto_plazo.otros_pasivos_corto_plazo" },
+    { label: "Pasivo Largo Plazo", special: "pasivo_lp_calc", total: true },
+    { label: "  Dividendos decretados", path: "balance_general.pasivos.largo_plazo.dividendos_decretados" },
+    { label: "  Pasivo por arrendamiento", path: "balance_general.pasivos.largo_plazo.pasivo_por_arrendamiento" },
+    { label: "  Deuda financiera LP", path: "balance_general.pasivos.largo_plazo.deuda_financiera_lp" },
+    { label: "TOTAL PASIVOS", path: "balance_general.pasivos.total_pasivos", total: true },
     { separator: "CAPITAL" },
-    { label: "Capital social",           path: "balance_general.capital_contable.capital_social" },
-    { label: "Utilidades acumuladas",    path: "balance_general.capital_contable.utilidades_acumuladas" },
-    { label: "Resultado ejercicio",      path: "balance_general.capital_contable.resultado_ejercicio_balance" },
-    { label: "TOTAL CAPITAL",            path: "balance_general.capital_contable.total_capital_contable",           total: true },
-    { label: "TOTAL PASIVO + CAPITAL",   special: "pasivo_capital",                                                 total: true },
+    { label: "Capital social", path: "balance_general.capital_contable.capital_social" },
+    { label: "Utilidades ejercicios anteriores", path: "balance_general.capital_contable.utilidades_ejercicios_anteriores" },
+    { label: "Resultado del ejercicio", path: "balance_general.capital_contable.resultado_del_ejercicio_balance" },
+    { label: "TOTAL CAPITAL", path: "balance_general.capital_contable.total_capital_contable", total: true },
+    { label: "TOTAL PASIVO + CAPITAL", special: "pasivo_capital", total: true },
   ];
 
   els.previewTableContainer.appendChild(buildTable("preview-er", "Estado de Resultados", erRows));
@@ -901,12 +1161,12 @@ function renderPreviewStatic() {
 function parseFile(file) {
   return file
     .text()
-    .then((text) => JSON.parse(text))
+    .then((text) => JSON.parse((text || "").replace(/^\uFEFF/, "")))
     .then((rawData) => normalizeData(rawData));
 }
 
 function parseRawJsonText(rawText) {
-  return normalizeData(JSON.parse(rawText));
+  return normalizeData(JSON.parse((rawText || "").replace(/^\uFEFF/, "")));
 }
 
 function parseFilenameFromHeader(contentDisposition) {
@@ -1084,3 +1344,4 @@ function bindEvents() {
 
 bindEvents();
 loadTemplateInfo();
+
