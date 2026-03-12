@@ -2,13 +2,22 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Carpetas locales de agentes/herramientas
+.agents/
+.claude/
+
 # Archivos Excel generados (output del script)
 AQUOS FINMEX*.xlsx
 ~$*.xlsx
 Valuacion_Completada*.xlsx
+salida_*.xlsx
 
 # Imagen de prueba
 image.png
 
 # Datos sensibles de clientes
 datos_extraidos_ia.json
+
+# Datos de prueba locales
+test.json
+test_input_*.json
