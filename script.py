@@ -1454,12 +1454,16 @@ def repair_resumen_final(wb):
         labels=["Activo Total", "Total Activos"],
         default_row=95,
     )
-    row_ebitda = _find_row_by_terms(
-        ws_datos,
-        include_terms=["ebitda"],
-        default_row=97,
-        label_col=3,
-    )
+    # Busqueda estricta de EBITDA en la seccion superior de 1. Datos.
+    # Regla: etiqueta exacta "EBITDA" (sin texto adicional), maximo primeras 100 filas.
+    max_row_to_scan = 100
+    row_ebitda = 97  # fallback forzoso
+    scan_limit = min(ws_datos.max_row, max_row_to_scan)
+    for row in range(1, scan_limit + 1):
+        label = _normalize_text(ws_datos.cell(row=row, column=3).value)
+        if label == "ebitda":
+            row_ebitda = row
+            break
 
     # Buscar etiquetas en RESUMEN.
     row_ebitda_2025 = _find_row_by_labels(
