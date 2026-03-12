@@ -27,7 +27,7 @@ FORCE_OVERWRITE_INJECTED_FORMULAS = True
 
 # Filas que reciben dato duro (se usan tambien para limpiar columnas no mapeadas).
 INJECTION_ROWS = [
-    6, 8, 9, 13, 14, 15, 16, 17, 18, 20, 21, 24, 25, 26, 27,
+    6, 8, 9, 13, 14, 15, 16, 17, 18, 20, 21, 22, 24, 25, 26, 27,
     45, 46, 47, 48, 49, 50, 51,
     65, 66, 67, 68, 69, 70, 84,
     105, 106, 107, 108, 109,
@@ -232,6 +232,91 @@ def resolve_target_column(periodo):
     return None, None
 
 
+def _to_int_if_year(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        iv = int(round(float(value)))
+        if abs(float(value) - iv) < 1e-9:
+            return iv
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if re.fullmatch(r"-?\d+(?:\.0+)?", text):
+        try:
+            return int(float(text))
+        except ValueError:
+            return None
+    return None
+
+
+def _detect_datos_year_columns(ws_datos, header_row=5):
+    """
+    Detecta columnas de 2024 y 2025 en 1. Datos.
+    Si falla, usa las ultimas 2 columnas numericas en la fila header_row.
+    """
+    col_2024_idx = None
+    col_2025_idx = None
+    numeric_cols = []
+
+    for col in range(1, ws_datos.max_column + 1):
+        year_val = _to_int_if_year(ws_datos.cell(row=header_row, column=col).value)
+        if year_val is None:
+            continue
+        numeric_cols.append(col)
+        if year_val == 2024:
+            col_2024_idx = col
+        if year_val == 2025:
+            col_2025_idx = col
+
+    if col_2024_idx is None or col_2025_idx is None:
+        if len(numeric_cols) >= 2:
+            col_2024_idx, col_2025_idx = numeric_cols[-2], numeric_cols[-1]
+        elif len(numeric_cols) == 1:
+            col_2025_idx = numeric_cols[-1]
+            col_2024_idx = max(1, col_2025_idx - 1)
+        else:
+            # Fallback duro esperado por negocio.
+            col_2024_idx = column_index_from_string("I")
+            col_2025_idx = column_index_from_string("J")
+
+    if col_2024_idx >= col_2025_idx:
+        col_2024_idx = max(1, col_2025_idx - 1)
+
+    col_2024 = get_column_letter(col_2024_idx)
+    col_2025 = get_column_letter(col_2025_idx)
+    return col_2024, col_2025, col_2024_idx, col_2025_idx
+
+
+def _find_calculos_sheet_name(wb):
+    for sh in wb.sheetnames:
+        sh_norm = _normalize_text(sh)
+        if sh_norm.startswith("2.") and "calculos" in sh_norm:
+            return sh
+    return None
+
+
+def _detect_calc_year_columns(ws_calc):
+    """
+    Detecta columnas 2024/2025 en hoja de calculos; fallback H/I.
+    Devuelve indices de columna.
+    """
+    for row in range(1, min(25, ws_calc.max_row) + 1):
+        found_2024 = None
+        found_2025 = None
+        for col in range(1, ws_calc.max_column + 1):
+            year_val = _to_int_if_year(ws_calc.cell(row=row, column=col).value)
+            if year_val == 2024:
+                found_2024 = col
+            if year_val == 2025:
+                found_2025 = col
+        if found_2024 and found_2025:
+            return found_2024, found_2025
+
+    return column_index_from_string("H"), column_index_from_string("I")
+
+
 def inject_headers(ws, col, label):
     for row in HEADER_ROWS:
         write_cell(ws, row, col, label, allow_formula_overwrite=False)
@@ -278,6 +363,7 @@ def inject_estado_resultados(ws, col, periodo):
     isr_corriente = abs(to_float(er.get("isr_corriente")))
     provision_ptu = abs(to_float(er.get("provision_ptu")))
     total_impuestos_generico = abs(to_float(er.get("total_impuestos_generico")))
+    ebitda = to_float(er.get("ebitda"))
     # Anti-doble conteo con residuo:
     # fila 13 toma lo faltante para llegar al total de gastos_operativos.
     gastos_desgloses_sum = (
@@ -339,6 +425,8 @@ def inject_estado_resultados(ws, col, periodo):
     ws.cell(row=21, column=3).value = "Otros Ingresos No Op"
     write_cell(ws, 20, col, otros_gastos_no_operativos)
     write_cell(ws, 21, col, otros_ingresos_no_operativos)
+    ws.cell(row=22, column=3).value = "EBITDA"
+    write_cell(ws, 22, col, ebitda)
     write_cell(
         ws,
         19,
@@ -590,6 +678,8 @@ def repair_resumen_escenario(wb):
 
     ws = wb[sheet_name]
     ws_datos = wb[datos_name]
+    col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
 
     row_depreciacion = _find_row_by_terms(
         ws_datos,
@@ -609,20 +699,29 @@ def repair_resumen_escenario(wb):
         )
 
     # 1) Realineacion columna T (2024).
-    set_formula_cell(ws, "='1. Datos'!I5", coord="T6")
-    set_formula_cell(ws, "='1. Datos'!I19", coord="T11")
-    set_formula_cell(ws, f"='1. Datos'!I{row_depreciacion}", coord="T18")
+    set_formula_cell(ws, f"='1. Datos'!{col_2024}5", coord="T6")
+    set_formula_cell(ws, f"='1. Datos'!{col_2024}19", coord="T11")
+    set_formula_cell(ws, f"='1. Datos'!{col_2024}{row_depreciacion}", coord="T18")
 
     # 2) Realineacion columna U (2025 base/proyeccion).
-    set_formula_cell(ws, "='1. Datos'!J5", coord="U6")
-    set_formula_cell(ws, "='1. Datos'!J19", coord="U11")
-    set_formula_cell(ws, f"='1. Datos'!J{row_depreciacion}", coord="U18")
+    set_formula_cell(ws, f"='1. Datos'!{col_2025}5", coord="U6")
+    set_formula_cell(ws, f"='1. Datos'!{col_2025}19", coord="U11")
+    set_formula_cell(ws, f"='1. Datos'!{col_2025}{row_depreciacion}", coord="U18")
 
     # Ajuste explicito de referencias de 2.Cálculos (2) para 2024/2025.
-    set_formula_cell(ws, "='2.Cálculos (2)'!H30", coord="T21")
-    set_formula_cell(ws, "='2.Cálculos (2)'!I30", coord="U21")
-    set_formula_cell(ws, "='2.Cálculos (2)'!H32", coord="T22")
-    set_formula_cell(ws, "='2.Cálculos (2)'!I32", coord="U22")
+    calc_name = _find_calculos_sheet_name(wb)
+    if calc_name and calc_name in wb.sheetnames:
+        col_calc_2024_idx, col_calc_2025_idx = _detect_calc_year_columns(wb[calc_name])
+        col_calc_2024 = get_column_letter(col_calc_2024_idx)
+        col_calc_2025 = get_column_letter(col_calc_2025_idx)
+    else:
+        calc_name = "2.Cálculos (2)"
+        col_calc_2024, col_calc_2025 = "H", "I"
+
+    set_formula_cell(ws, f"='{calc_name}'!{col_calc_2024}30", coord="T21")
+    set_formula_cell(ws, f"='{calc_name}'!{col_calc_2025}30", coord="U21")
+    set_formula_cell(ws, f"='{calc_name}'!{col_calc_2024}32", coord="T22")
+    set_formula_cell(ws, f"='{calc_name}'!{col_calc_2025}32", coord="U22")
 
     # 3) Curacion de errores: limpiar formulas rotas.
     for row in ws.iter_rows(
@@ -804,6 +903,8 @@ def repair_dupont(wb):
 
     ws_dupont = wb[dupont_name]
     ws_datos = wb[datos_name]
+    col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
 
     # Detecta filas reales de totales en 1. Datos (con fallback).
     row_activo_total = _find_row_by_labels(
@@ -827,23 +928,47 @@ def repair_dupont(wb):
     )
 
     # Actualizacion dinamica ultimos 2 anos (G=2024, H=2025).
-    set_formula_cell(ws_dupont, "='1. Datos'!I5", coord="G10")
-    set_formula_cell(ws_dupont, "='1. Datos'!J5", coord="H10")
+    set_formula_cell(ws_dupont, f"='1. Datos'!{col_2024}5", coord="G10")
+    set_formula_cell(ws_dupont, f"='1. Datos'!{col_2025}5", coord="H10")
 
-    set_formula_cell(ws_dupont, "='1. Datos'!I8", coord="G11")
-    set_formula_cell(ws_dupont, "='1. Datos'!J8", coord="H11")
+    set_formula_cell(ws_dupont, f"='1. Datos'!{col_2024}8", coord="G11")
+    set_formula_cell(ws_dupont, f"='1. Datos'!{col_2025}8", coord="H11")
 
-    set_formula_cell(ws_dupont, "='1. Datos'!I30", coord="G12")
-    set_formula_cell(ws_dupont, "='1. Datos'!J30", coord="H12")
+    set_formula_cell(ws_dupont, f"='1. Datos'!{col_2024}30", coord="G12")
+    set_formula_cell(ws_dupont, f"='1. Datos'!{col_2025}30", coord="H12")
 
-    set_formula_cell(ws_dupont, f"='1. Datos'!I{row_activo_total}", coord="G13")
-    set_formula_cell(ws_dupont, f"='1. Datos'!J{row_activo_total}", coord="H13")
+    set_formula_cell(
+        ws_dupont,
+        f"='1. Datos'!{col_2024}{row_activo_total}",
+        coord="G13",
+    )
+    set_formula_cell(
+        ws_dupont,
+        f"='1. Datos'!{col_2025}{row_activo_total}",
+        coord="H13",
+    )
 
-    set_formula_cell(ws_dupont, f"='1. Datos'!I{row_pasivo_total}", coord="G14")
-    set_formula_cell(ws_dupont, f"='1. Datos'!J{row_pasivo_total}", coord="H14")
+    set_formula_cell(
+        ws_dupont,
+        f"='1. Datos'!{col_2024}{row_pasivo_total}",
+        coord="G14",
+    )
+    set_formula_cell(
+        ws_dupont,
+        f"='1. Datos'!{col_2025}{row_pasivo_total}",
+        coord="H14",
+    )
 
-    set_formula_cell(ws_dupont, f"='1. Datos'!I{row_capital_total}", coord="G15")
-    set_formula_cell(ws_dupont, f"='1. Datos'!J{row_capital_total}", coord="H15")
+    set_formula_cell(
+        ws_dupont,
+        f"='1. Datos'!{col_2024}{row_capital_total}",
+        coord="G15",
+    )
+    set_formula_cell(
+        ws_dupont,
+        f"='1. Datos'!{col_2025}{row_capital_total}",
+        coord="H15",
+    )
 
     # Curacion de referencias rotas en toda la hoja Dupont.
     for row in ws_dupont.iter_rows(
@@ -881,6 +1006,8 @@ def repair_wacc(wb):
 
     ws_wacc = wb[wacc_name]
     ws_datos = wb[datos_name]
+    col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
 
     # Detecta filas reales en 1. Datos (con fallback).
     row_deuda_cp = _find_row_by_labels(
@@ -903,8 +1030,10 @@ def repair_wacc(wb):
         default_row=135,
     )
 
-    deuda_formula = f"='1. Datos'!J{row_deuda_cp}+'1. Datos'!J{row_deuda_lp}"
-    capital_formula = f"='1. Datos'!J{row_capital_total}"
+    deuda_formula = (
+        f"='1. Datos'!{col_2025}{row_deuda_cp}+'1. Datos'!{col_2025}{row_deuda_lp}"
+    )
+    capital_formula = f"='1. Datos'!{col_2025}{row_capital_total}"
 
     # Busca celdas de valores en pesos para Deuda y Capital (bloque inferior).
     debt_targets = []
@@ -969,12 +1098,7 @@ def repair_calculos_2(wb):
     Reconecta entradas clave de 2.Cálculos (2) para 2024/2025 y limpia referencias rotas.
     """
     datos_name = "1. Datos"
-    calc_name = None
-    for sh in wb.sheetnames:
-        sh_norm = _normalize_text(sh)
-        if sh_norm.startswith("2.") and "calculos" in sh_norm:
-            calc_name = sh
-            break
+    calc_name = _find_calculos_sheet_name(wb)
 
     if calc_name is None:
         print("AVISO: no se encontro hoja de '2.Cálculos (2)' para reparacion.")
@@ -987,27 +1111,17 @@ def repair_calculos_2(wb):
 
     ws_calc = wb[calc_name]
     ws_datos = wb[datos_name]
+    src_col_2024, src_col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    print(
+        f"DEBUG: Inyectando fórmulas en columnas {src_col_2024} y {src_col_2025}"
+    )
 
     # Detecta columnas 2024 y 2025 en la fila de anos.
-    col_2024 = None
-    col_2025 = None
-    for row in range(1, min(25, ws_calc.max_row) + 1):
-        found_2024 = None
-        found_2025 = None
-        for col in range(1, ws_calc.max_column + 1):
-            val = ws_calc.cell(row=row, column=col).value
-            val_norm = str(val).strip() if val is not None else ""
-            if val == 2024 or val_norm == "2024":
-                found_2024 = col
-            if val == 2025 or val_norm == "2025":
-                found_2025 = col
-        if found_2024 and found_2025:
-            col_2024, col_2025 = found_2024, found_2025
-            break
-
-    if col_2024 is None or col_2025 is None:
-        # Fallback: H e I.
-        col_2024, col_2025 = 8, 9
+    col_2024, col_2025 = _detect_calc_year_columns(ws_calc)
+    print(
+        "DEBUG: 2.Cálculos destino columnas "
+        f"{get_column_letter(col_2024)} y {get_column_letter(col_2025)}"
+    )
 
     # Filas fuente en 1. Datos.
     row_un = _find_row_by_labels(
@@ -1104,13 +1218,13 @@ def repair_calculos_2(wb):
     for dst_row, src_row in base_map:
         set_formula_cell(
             ws_calc,
-            f"='1. Datos'!I{src_row}",
+            f"='1. Datos'!{src_col_2024}{src_row}",
             row=dst_row,
             col=col_2024,
         )
         set_formula_cell(
             ws_calc,
-            f"='1. Datos'!J{src_row}",
+            f"='1. Datos'!{src_col_2025}{src_row}",
             row=dst_row,
             col=col_2025,
         )
@@ -1118,13 +1232,13 @@ def repair_calculos_2(wb):
     for dst_row in rows_dest_dep:
         set_formula_cell(
             ws_calc,
-            f"='1. Datos'!I{row_dep}",
+            f"='1. Datos'!{src_col_2024}{row_dep}",
             row=dst_row,
             col=col_2024,
         )
         set_formula_cell(
             ws_calc,
-            f"='1. Datos'!J{row_dep}",
+            f"='1. Datos'!{src_col_2025}{row_dep}",
             row=dst_row,
             col=col_2025,
         )
@@ -1165,6 +1279,10 @@ def repair_razones_financieras(wb):
 
     ws_rf = wb[rf_name]
     ws_datos = wb[datos_name]
+    src_col_2024, src_col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    print(
+        f"DEBUG: Inyectando fórmulas en columnas {src_col_2024} y {src_col_2025}"
+    )
 
     # Detecta filas reales de totales en 1. Datos.
     row_activo_total = _find_row_by_labels(
@@ -1237,25 +1355,55 @@ def repair_razones_financieras(wb):
     ) or [9]
 
     # Inyeccion de ultimos 2 periodos.
-    set_formula_cell(ws_rf, "='1. Datos'!I5", row=row_datos, col=col_2024)
-    set_formula_cell(ws_rf, "='1. Datos'!J5", row=row_datos, col=col_2025)
+    set_formula_cell(
+        ws_rf,
+        f"='1. Datos'!{src_col_2024}5",
+        row=row_datos,
+        col=col_2024,
+    )
+    set_formula_cell(
+        ws_rf,
+        f"='1. Datos'!{src_col_2025}5",
+        row=row_datos,
+        col=col_2025,
+    )
 
-    set_formula_cell(ws_rf, "='1. Datos'!I8", row=row_ventas, col=col_2024)
-    set_formula_cell(ws_rf, "='1. Datos'!J8", row=row_ventas, col=col_2025)
+    set_formula_cell(
+        ws_rf,
+        f"='1. Datos'!{src_col_2024}8",
+        row=row_ventas,
+        col=col_2024,
+    )
+    set_formula_cell(
+        ws_rf,
+        f"='1. Datos'!{src_col_2025}8",
+        row=row_ventas,
+        col=col_2025,
+    )
 
-    set_formula_cell(ws_rf, "='1. Datos'!I30", row=row_un, col=col_2024)
-    set_formula_cell(ws_rf, "='1. Datos'!J30", row=row_un, col=col_2025)
+    set_formula_cell(
+        ws_rf,
+        f"='1. Datos'!{src_col_2024}30",
+        row=row_un,
+        col=col_2024,
+    )
+    set_formula_cell(
+        ws_rf,
+        f"='1. Datos'!{src_col_2025}30",
+        row=row_un,
+        col=col_2025,
+    )
 
     for row in rows_activo:
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!I{row_activo_total}",
+            f"='1. Datos'!{src_col_2024}{row_activo_total}",
             row=row,
             col=col_2024,
         )
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!J{row_activo_total}",
+            f"='1. Datos'!{src_col_2025}{row_activo_total}",
             row=row,
             col=col_2025,
         )
@@ -1263,13 +1411,13 @@ def repair_razones_financieras(wb):
     for row in rows_pasivo:
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!I{row_pasivo_total}",
+            f"='1. Datos'!{src_col_2024}{row_pasivo_total}",
             row=row,
             col=col_2024,
         )
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!J{row_pasivo_total}",
+            f"='1. Datos'!{src_col_2025}{row_pasivo_total}",
             row=row,
             col=col_2025,
         )
@@ -1277,13 +1425,13 @@ def repair_razones_financieras(wb):
     for row in rows_capital:
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!I{row_capital_total}",
+            f"='1. Datos'!{src_col_2024}{row_capital_total}",
             row=row,
             col=col_2024,
         )
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!J{row_capital_total}",
+            f"='1. Datos'!{src_col_2025}{row_capital_total}",
             row=row,
             col=col_2025,
         )
@@ -1400,13 +1548,13 @@ def repair_razones_financieras(wb):
     for dst_row, src_row in subaccount_map:
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!I{src_row}",
+            f"='1. Datos'!{src_col_2024}{src_row}",
             row=dst_row,
             col=col_2024,
         )
         set_formula_cell(
             ws_rf,
-            f"='1. Datos'!J{src_row}",
+            f"='1. Datos'!{src_col_2025}{src_row}",
             row=dst_row,
             col=col_2025,
         )
@@ -1447,6 +1595,8 @@ def repair_resumen_final(wb):
 
     ws_resumen = wb[resumen_name]
     ws_datos = wb[datos_name]
+    col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
 
     # Filas detectadas en 1. Datos (con fallback).
     row_activo_total = _find_row_by_labels(
@@ -1516,7 +1666,7 @@ def repair_resumen_final(wb):
         val_col = _find_value_col_for_label_row(ws_resumen, row, label_col=1)
         set_formula_cell(
             ws_resumen,
-            f"='1. Datos'!J{row_ebitda}",
+            f"='1. Datos'!{col_2025}{row_ebitda}",
             row=row,
             col=val_col,
         )
@@ -1524,7 +1674,7 @@ def repair_resumen_final(wb):
     valor_col = _find_value_col_for_label_row(ws_resumen, row_valor_contable, label_col=1)
     set_formula_cell(
         ws_resumen,
-        f"='1. Datos'!J{row_activo_total}",
+        f"='1. Datos'!{col_2025}{row_activo_total}",
         row=row_valor_contable,
         col=valor_col,
     )
