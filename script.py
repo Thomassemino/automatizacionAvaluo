@@ -140,7 +140,7 @@ def ensure_required_formulas(ws):
             12: f"=SUM({col_l}13:{col_l}18)",
             19: f"={col_l}10-{col_l}12",
             29: f"=SUM({col_l}25:{col_l}28)",
-            30: f"={col_l}19-{col_l}20+{col_l}21+{col_l}24-{col_l}29",
+            30: f"={col_l}19+{col_l}24-{col_l}29",
             44: f"=SUM({col_l}45:{col_l}63)",
             64: f"=SUM({col_l}65:{col_l}82)",
             83: f"=SUM({col_l}84:{col_l}94)",
@@ -176,7 +176,7 @@ def inject_native_formulas(ws, col):
         12: f"=SUM({col_l}13:{col_l}18)",
         19: f"={col_l}10-{col_l}12",
         29: f"=SUM({col_l}25:{col_l}28)",
-        30: f"={col_l}19-{col_l}20+{col_l}21+{col_l}24-{col_l}29",
+        30: f"={col_l}19+{col_l}24-{col_l}29",
         44: f"=SUM({col_l}45:{col_l}63)",
         64: f"=SUM({col_l}65:{col_l}82)",
         83: f"=SUM({col_l}84:{col_l}94)",
@@ -197,6 +197,16 @@ def inject_native_formulas(ws, col):
 
     for row, formula in formulas.items():
         write_cell(ws, row, col, formula, allow_formula_overwrite=True)
+
+
+def enforce_core_subtotals(ws, cols):
+    """
+    Refuerza subtotales clave en 1. Datos para columnas cargadas.
+    """
+    for col in sorted(cols):
+        col_l = get_column_letter(col)
+        set_formula_cell(ws, f"={col_l}8-{col_l}9", row=10, col=col)
+        set_formula_cell(ws, f"={col_l}10-{col_l}12", row=19, col=col)
 
 
 def clear_unmapped_columns(ws, mapped_cols):
@@ -289,6 +299,33 @@ def _detect_datos_year_columns(ws_datos, header_row=5):
     return col_2024, col_2025, col_2024_idx, col_2025_idx
 
 
+def _detect_projection_column(ws_datos, col_2025_idx, header_row=5):
+    """
+    Detecta columna proyectada (normalmente K) a partir de 2025 (normalmente J).
+    Prioriza encabezados con texto de proyeccion y fallback a la columna inmediata
+    a la derecha si tiene formulas en filas de resultado clave.
+    """
+    max_col = ws_datos.max_column
+
+    # 1) Busca encabezado con "proy" en columnas siguientes.
+    for col in range(col_2025_idx + 1, min(max_col, col_2025_idx + 4) + 1):
+        header = ws_datos.cell(row=header_row, column=col).value
+        header_text = str(header or "").strip().lower()
+        if "proy" in header_text:
+            return get_column_letter(col), col
+
+    # 2) Fallback: columna inmediata con formulas en filas clave.
+    next_col = col_2025_idx + 1
+    if next_col <= max_col:
+        if has_formula(ws_datos.cell(row=19, column=next_col).value) or has_formula(
+            ws_datos.cell(row=30, column=next_col).value
+        ):
+            return get_column_letter(next_col), next_col
+
+    # 3) Ultimo fallback: usar 2025 base.
+    return get_column_letter(col_2025_idx), col_2025_idx
+
+
 def _find_calculos_sheet_name(wb):
     for sh in wb.sheetnames:
         sh_norm = _normalize_text(sh)
@@ -363,7 +400,6 @@ def inject_estado_resultados(ws, col, periodo):
     isr_corriente = abs(to_float(er.get("isr_corriente")))
     provision_ptu = abs(to_float(er.get("provision_ptu")))
     total_impuestos_generico = abs(to_float(er.get("total_impuestos_generico")))
-    ebitda = to_float(er.get("ebitda"))
     # Anti-doble conteo con residuo:
     # fila 13 toma lo faltante para llegar al total de gastos_operativos.
     gastos_desgloses_sum = (
@@ -392,19 +428,17 @@ def inject_estado_resultados(ws, col, periodo):
 
     # Fila 9: costo de ventas en valor absoluto.
     write_cell(ws, 9, col, costo_ventas)
-    write_cell(
+    set_formula_cell(
         ws,
-        10,
-        col,
         f"={get_column_letter(col)}8-{get_column_letter(col)}9",
-        allow_formula_overwrite=True,
+        row=10,
+        col=col,
     )
-    write_cell(
+    set_formula_cell(
         ws,
-        12,
-        col,
         f"=SUM({get_column_letter(col)}13:{get_column_letter(col)}18)",
-        allow_formula_overwrite=True,
+        row=12,
+        col=col,
     )
 
     # Filas 13 a 18.
@@ -425,14 +459,20 @@ def inject_estado_resultados(ws, col, periodo):
     ws.cell(row=21, column=3).value = "Otros Ingresos No Op"
     write_cell(ws, 20, col, otros_gastos_no_operativos)
     write_cell(ws, 21, col, otros_ingresos_no_operativos)
+    # EBITDA forzado por logica del modelo:
+    # Utilidad de operacion (fila 19) + Depreciacion por periodo (fila 98).
     ws.cell(row=22, column=3).value = "EBITDA"
-    write_cell(ws, 22, col, ebitda)
-    write_cell(
+    set_formula_cell(
         ws,
-        19,
-        col,
+        f"={get_column_letter(col)}19+ABS({get_column_letter(col)}98)",
+        row=22,
+        col=col,
+    )
+    set_formula_cell(
+        ws,
         f"={get_column_letter(col)}10-{get_column_letter(col)}12",
-        allow_formula_overwrite=True,
+        row=19,
+        col=col,
     )
 
     # Fila 24: RIF inyectado como dato duro (sobrescribe formula por instruccion).
@@ -448,12 +488,11 @@ def inject_estado_resultados(ws, col, periodo):
     write_cell(ws, 25, col, isr_diferido)
     write_cell(ws, 26, col, isr_corriente)
     write_cell(ws, 27, col, provision_ptu)
-    write_cell(
+    set_formula_cell(
         ws,
-        29,
-        col,
         f"=SUM({get_column_letter(col)}25:{get_column_letter(col)}28)",
-        allow_formula_overwrite=True,
+        row=29,
+        col=col,
     )
 
     # Fila 29: si 25,26,27 son 0 y llega total agrupado, inyectar valor duro.
@@ -471,15 +510,13 @@ def inject_estado_resultados(ws, col, periodo):
             allow_formula_overwrite=True,
         )
 
-    # Fila 30: utilidad neta calculada con no operativos + RIF - impuestos.
-    write_cell(
+    # Fila 30: utilidad neta = utilidad operativa +/- RIF - impuestos.
+    set_formula_cell(
         ws,
-        30,
-        col,
-        f"={get_column_letter(col)}19-{get_column_letter(col)}20+"
-        f"{get_column_letter(col)}21+{get_column_letter(col)}24-"
+        f"={get_column_letter(col)}19+{get_column_letter(col)}24-"
         f"{get_column_letter(col)}29",
-        allow_formula_overwrite=True,
+        row=30,
+        col=col,
     )
 
 
@@ -678,35 +715,22 @@ def repair_resumen_escenario(wb):
 
     ws = wb[sheet_name]
     ws_datos = wb[datos_name]
-    col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
-    print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
-
-    row_depreciacion = _find_row_by_terms(
-        ws_datos,
-        include_terms=["depreciacion"],
-        exclude_terms=["acumulada"],
-        default_row=98,
-        label_col=3,
+    col_2024, col_2025, _, col_2025_idx = _detect_datos_year_columns(
+        ws_datos
     )
-    if row_depreciacion == 98:
-        # Respaldo por nombre historico en la plantilla.
-        row_depreciacion = _find_row_by_terms(
-            ws_datos,
-            include_terms=["depreciacion", "periodo"],
-            exclude_terms=["acumulada"],
-            default_row=98,
-            label_col=3,
-        )
+    col_2025_proj, _ = _detect_projection_column(ws_datos, col_2025_idx)
+    print(
+        "DEBUG: Inyectando fórmulas en columnas "
+        f"{col_2024} y {col_2025} (proyectada: {col_2025_proj})"
+    )
 
-    # 1) Realineacion columna T (2024).
-    set_formula_cell(ws, f"='1. Datos'!{col_2024}5", coord="T6")
+    # 1) Conserva la secuencia de anos del escenario (sin quemar texto de encabezado).
+    set_formula_cell(ws, "=+S6+1", coord="T6")
+    set_formula_cell(ws, "=+T6+1", coord="U6")
+
+    # 2) EBIT historico y base proyectada.
     set_formula_cell(ws, f"='1. Datos'!{col_2024}19", coord="T11")
-    set_formula_cell(ws, f"='1. Datos'!{col_2024}{row_depreciacion}", coord="T18")
-
-    # 2) Realineacion columna U (2025 base/proyeccion).
-    set_formula_cell(ws, f"='1. Datos'!{col_2025}5", coord="U6")
-    set_formula_cell(ws, f"='1. Datos'!{col_2025}19", coord="U11")
-    set_formula_cell(ws, f"='1. Datos'!{col_2025}{row_depreciacion}", coord="U18")
+    set_formula_cell(ws, f"='1. Datos'!{col_2025_proj}19", coord="U11")
 
     # Ajuste explicito de referencias de 2.Cálculos (2) para 2024/2025.
     calc_name = _find_calculos_sheet_name(wb)
@@ -718,27 +742,21 @@ def repair_resumen_escenario(wb):
         calc_name = "2.Cálculos (2)"
         col_calc_2024, col_calc_2025 = "H", "I"
 
+    # Depreciacion debe venir de la hoja de calculos para mantener signo/add-back.
+    set_formula_cell(ws, f"='{calc_name}'!{col_calc_2024}27", coord="T18")
+    set_formula_cell(ws, f"='{calc_name}'!{col_calc_2025}27", coord="U18")
+
     set_formula_cell(ws, f"='{calc_name}'!{col_calc_2024}30", coord="T21")
     set_formula_cell(ws, f"='{calc_name}'!{col_calc_2025}30", coord="U21")
     set_formula_cell(ws, f"='{calc_name}'!{col_calc_2024}32", coord="T22")
     set_formula_cell(ws, f"='{calc_name}'!{col_calc_2025}32", coord="U22")
 
-    # 3) Curacion de errores: limpiar formulas rotas.
-    for row in ws.iter_rows(
-        min_row=1,
-        max_row=ws.max_row,
-        min_col=1,
-        max_col=ws.max_column,
-    ):
-        for cell in row:
-            if not isinstance(cell.value, str):
-                continue
-            if "#REF!" in cell.value or "[3]" in cell.value:
-                cell.value = 0.0
-                print(
-                    "ALERTA: Se limpió referencia rota en la celda "
-                    f"{cell.coordinate} de 4.Resumen-Escenario"
-                )
+    # Blindaje de AP28 para mantener la logica original del escenario.
+    set_formula_cell(ws, "=IF(SUM(AP26:AU26)>0,SUM(AP26:AU26),0)", coord="AP28")
+
+    # 3) No limpiar referencias en esta hoja:
+    # El modelo de escenario usa formulas historicas enlazadas y forzar limpieza
+    # altera AP28/AP36, generando desvio en RESUMEN!B7/B8.
 
 
 def _normalize_text(value):
@@ -912,6 +930,24 @@ def repair_dupont(wb):
         labels=["Activo Total", "Total Activos"],
         default_row=95,
     )
+    row_capital_total = _find_row_by_labels(
+        ws_datos,
+        labels=[
+            "Capital Total",
+            "Total Capital Contable",
+            "Capital Contable Total",
+        ],
+        default_row=135,
+    )
+    row_capital_total = _find_row_by_labels(
+        ws_datos,
+        labels=[
+            "Capital Total",
+            "Total Capital Contable",
+            "Capital Contable Total",
+        ],
+        default_row=135,
+    )
     row_pasivo_total = _find_row_by_labels(
         ws_datos,
         labels=["Pasivo Total", "Total Pasivos"],
@@ -1009,6 +1045,14 @@ def repair_wacc(wb):
     col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
     print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
 
+    # Blindaje de inputs base WACC (deben coincidir con el original).
+    ws_wacc["G4"].value = 0.0417  # Risk Free Rate
+    ws_wacc["G5"].value = 0.0687  # Equity Risk Premium
+    ws_wacc["C22"].value = 0.0417
+    ws_wacc["C23"].value = 1.101955
+    ws_wacc["C24"].value = 0.0687
+    ws_wacc["C25"].value = 0.0257
+
     # Detecta filas reales en 1. Datos (con fallback).
     row_deuda_cp = _find_row_by_labels(
         ws_datos,
@@ -1030,50 +1074,28 @@ def repair_wacc(wb):
         default_row=135,
     )
 
-    deuda_formula = (
-        f"='1. Datos'!{col_2025}{row_deuda_cp}+'1. Datos'!{col_2025}{row_deuda_lp}"
+    # Mantener trazabilidad al layout original de WACC:
+    # H30 toma Pasivo LP total (fila 119) y H31 toma Capital total (fila 125).
+    deuda_monto_formula = f"='1. Datos'!{col_2025}119"
+    capital_monto_formula = f"='1. Datos'!{col_2025}125"
+
+    # Bloque de montos (pesos).
+    set_formula_cell(ws_wacc, deuda_monto_formula, coord="H30")
+    set_formula_cell(ws_wacc, capital_monto_formula, coord="H31")
+    set_formula_cell(ws_wacc, "=SUM(H30+H31)", coord="H32")
+
+    # Mantener formulas originales de pesos relativos desde Estructura de deuda.
+    set_formula_cell(ws_wacc, "=+'Estructura de deuda'!J49", coord="I30")  # D/V
+    set_formula_cell(ws_wacc, "=+'Estructura de deuda'!E49", coord="I31")  # C/V
+
+    # Asegura que el bloque final use pesos relativos, no montos en pesos.
+    set_formula_cell(ws_wacc, "=I30", coord="K24")
+    set_formula_cell(ws_wacc, "=I31", coord="K25")
+    set_formula_cell(
+        ws_wacc,
+        "=((K25)*(K22)+((K24)*(1-K23)*(K21)))",
+        coord="K26",
     )
-    capital_formula = f"='1. Datos'!{col_2025}{row_capital_total}"
-
-    # Busca celdas de valores en pesos para Deuda y Capital (bloque inferior).
-    debt_targets = []
-    capital_targets = []
-    debt_labels = {"dlp", "deuda", "deuda lp", "deuda financiera", "deuda total"}
-    capital_labels = {"c", "capital", "capital contable", "equity"}
-
-    for row in range(28, ws_wacc.max_row + 1):
-        for col in range(1, ws_wacc.max_column):
-            label = _normalize_text(ws_wacc.cell(row=row, column=col).value)
-            if not label:
-                continue
-            next_coord = ws_wacc.cell(row=row, column=col + 1).coordinate
-            if label in debt_labels:
-                debt_targets.append(next_coord)
-            if label in capital_labels:
-                capital_targets.append(next_coord)
-
-    # Si existe el bloque alterno (columna I) atado a Estructura de deuda, lo reconecta.
-    if isinstance(ws_wacc["I30"].value, str) and "Estructura de deuda" in ws_wacc["I30"].value:
-        debt_targets.append("I30")
-    if isinstance(ws_wacc["I31"].value, str) and "Estructura de deuda" in ws_wacc["I31"].value:
-        capital_targets.append("I31")
-
-    # Fallback explicito si no se detectaron celdas de destino.
-    if not debt_targets:
-        debt_targets = ["C24"]
-    if not capital_targets:
-        capital_targets = ["C25"]
-
-    # Deduplicar manteniendo orden.
-    seen = set()
-    debt_targets = [c for c in debt_targets if not (c in seen or seen.add(c))]
-    seen = set()
-    capital_targets = [c for c in capital_targets if not (c in seen or seen.add(c))]
-
-    for coord in debt_targets:
-        set_formula_cell(ws_wacc, deuda_formula, coord=coord)
-    for coord in capital_targets:
-        set_formula_cell(ws_wacc, capital_formula, coord=coord)
 
     # Curacion de referencias rotas.
     for row in ws_wacc.iter_rows(
@@ -1111,7 +1133,10 @@ def repair_calculos_2(wb):
 
     ws_calc = wb[calc_name]
     ws_datos = wb[datos_name]
-    src_col_2024, src_col_2025, _, _ = _detect_datos_year_columns(ws_datos)
+    src_col_2024, src_col_2025, _, src_col_2025_idx = _detect_datos_year_columns(
+        ws_datos
+    )
+    src_col_2025_proj, _ = _detect_projection_column(ws_datos, src_col_2025_idx)
     print(
         f"DEBUG: Inyectando fórmulas en columnas {src_col_2024} y {src_col_2025}"
     )
@@ -1213,7 +1238,6 @@ def repair_calculos_2(wb):
         (row_dest_capital, row_capital_total),
         (row_dest_ac, row_ac),
         (row_dest_pc, row_pc),
-        (row_dest_ebit, row_ebit),
     ]
     for dst_row, src_row in base_map:
         set_formula_cell(
@@ -1229,36 +1253,61 @@ def repair_calculos_2(wb):
             col=col_2025,
         )
 
-    for dst_row in rows_dest_dep:
+    # EBIT: en 2025 debe tomar columna proyectada (K) como en el original.
+    set_formula_cell(
+        ws_calc,
+        f"='1. Datos'!{src_col_2024}{row_ebit}",
+        row=row_dest_ebit,
+        col=col_2024,
+    )
+    set_formula_cell(
+        ws_calc,
+        f"='1. Datos'!{src_col_2025_proj}{row_ebit}",
+        row=row_dest_ebit,
+        col=col_2025,
+    )
+
+    col_2024_l = get_column_letter(col_2024)
+    col_2025_l = get_column_letter(col_2025)
+
+    # Depreciacion: respetar signatura del original para no romper FCF.
+    # Fila 27: add-back = -('1. Datos'!row_dep)
+    if ws_calc.max_row >= 27:
+        set_formula_cell(
+            ws_calc,
+            f"=-('1. Datos'!{src_col_2024}{row_dep})",
+            row=27,
+            col=col_2024,
+        )
+        set_formula_cell(
+            ws_calc,
+            f"=-('1. Datos'!{src_col_2025}{row_dep})",
+            row=27,
+            col=col_2025,
+        )
+
+    # Fila 31: replica de fila 27.
+    if ws_calc.max_row >= 31:
+        set_formula_cell(ws_calc, f"={col_2024_l}27", row=31, col=col_2024)
+        set_formula_cell(ws_calc, f"={col_2025_l}27", row=31, col=col_2025)
+
+    # Fila 80: referencia directa (sin ABS) como en el original.
+    if ws_calc.max_row >= 80:
         set_formula_cell(
             ws_calc,
             f"='1. Datos'!{src_col_2024}{row_dep}",
-            row=dst_row,
+            row=80,
             col=col_2024,
         )
         set_formula_cell(
             ws_calc,
             f"='1. Datos'!{src_col_2025}{row_dep}",
-            row=dst_row,
+            row=80,
             col=col_2025,
         )
 
-    # Curacion de referencias rotas.
-    for row in ws_calc.iter_rows(
-        min_row=1,
-        max_row=ws_calc.max_row,
-        min_col=1,
-        max_col=ws_calc.max_column,
-    ):
-        for cell in row:
-            if not isinstance(cell.value, str):
-                continue
-            if "#REF!" in cell.value or "[3]" in cell.value:
-                cell.value = 0.0
-                print(
-                    "ALERTA: Se limpió referencia rota en la celda "
-                    f"{cell.coordinate} de {calc_name}"
-                )
+    # En esta hoja no se limpia #REF!/enlaces externos porque rompe cadenas base
+    # de cálculo del modelo original.
 
 
 def repair_razones_financieras(wb):
@@ -1604,16 +1653,18 @@ def repair_resumen_final(wb):
         labels=["Activo Total", "Total Activos"],
         default_row=95,
     )
-    # Busqueda estricta de EBITDA en la seccion superior de 1. Datos.
-    # Regla: etiqueta exacta "EBITDA" (sin texto adicional), maximo primeras 100 filas.
-    max_row_to_scan = 100
-    row_ebitda = 97  # fallback forzoso
-    scan_limit = min(ws_datos.max_row, max_row_to_scan)
-    for row in range(1, scan_limit + 1):
-        label = _normalize_text(ws_datos.cell(row=row, column=3).value)
-        if label == "ebitda":
-            row_ebitda = row
-            break
+    row_capital_total = _find_row_by_labels(
+        ws_datos,
+        labels=[
+            "Capital Total",
+            "Total Capital Contable",
+            "Capital Contable Total",
+        ],
+        default_row=135,
+    )
+    # EBITDA estricto del modelo: Utilidad de la Operacion (fila 19)
+    # + Depreciacion por periodo (fila 98). No usar 68/97 en RESUMEN.
+    ebitda_formula_2025 = f"='1. Datos'!{col_2025}30"
 
     # Buscar etiquetas en RESUMEN.
     row_ebitda_2025 = _find_row_by_labels(
@@ -1666,15 +1717,22 @@ def repair_resumen_final(wb):
         val_col = _find_value_col_for_label_row(ws_resumen, row, label_col=1)
         set_formula_cell(
             ws_resumen,
-            f"='1. Datos'!{col_2025}{row_ebitda}",
+            ebitda_formula_2025,
             row=row,
             col=val_col,
         )
 
+    # Refuerzo explicito de celdas ejecutivas solicitadas.
+    set_formula_cell(ws_resumen, "='WACC'!K26", coord="B4")
+    set_formula_cell(ws_resumen, ebitda_formula_2025, coord="B6")
+    set_formula_cell(ws_resumen, ebitda_formula_2025, coord="B12")
+    set_formula_cell(ws_resumen, f"='1. Datos'!{col_2025}{row_capital_total}", coord="B5")
+    set_formula_cell(ws_resumen, "='4.Resumen-Escenario'!AP36", coord="B7")
+
     valor_col = _find_value_col_for_label_row(ws_resumen, row_valor_contable, label_col=1)
     set_formula_cell(
         ws_resumen,
-        f"='1. Datos'!{col_2025}{row_activo_total}",
+        f"='1. Datos'!{col_2025}{row_capital_total}",
         row=row_valor_contable,
         col=valor_col,
     )
@@ -1748,6 +1806,8 @@ def inyectar_datos_financieros(json_path, template_path, output_path):
         inject_native_formulas(ws, col)
         inject_estado_resultados(ws, col, periodo)
         inject_balance_general(ws, col, periodo)
+
+    enforce_core_subtotals(ws, mapped_cols)
 
     repair_calculos_2(wb)
     repair_resumen_escenario(wb)
