@@ -1,8 +1,20 @@
-﻿import json
+import json
+import os
 import re
 import unicodedata
+from datetime import datetime
 
 import openpyxl
+import scraper_us10y
+import scraper_riesgo_pais
+import scraper_damodaran_mexico
+import scraper_damodaran_growth
+import parse_ps_multiples
+import parse_fundgr
+import parse_wacc
+import parse_ev_sales
+import parse_margin
+import scraper_fundgrEB
 from openpyxl.utils import column_index_from_string, get_column_letter
 
 JSON_FILE = "datos_extraidos_ia.json"
@@ -357,6 +369,25 @@ def _detect_calc_year_columns(ws_calc):
 def inject_headers(ws, col, label):
     for row in HEADER_ROWS:
         write_cell(ws, row, col, label, allow_formula_overwrite=False)
+
+
+# Filas P&L que se anualizan en col L (promedio mensual = J/mes)
+_PL_ROWS_HELPER = [6, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 98]
+
+def inject_col_l_annualization(ws, mes_cierre, col_data="J", col_helper="L"):
+    """
+    Actualiza col L con el divisor real (mes_cierre) del anio parcial.
+    Col K ya tiene =+L{row}*12 en el template; solo necesitamos fijar el denominador.
+    Si mes_cierre <= 0 o None, usa 12 (anio completo = espejo sin division).
+    """
+    mes = int(mes_cierre) if mes_cierre else 12
+    if mes <= 0:
+        mes = 12
+    for row in _PL_ROWS_HELPER:
+        ws.cell(row=row, column=column_index_from_string(col_helper)).value = (
+            f"=+{col_data}{row}/{mes}"
+        )
+    print(f"INFO: Col {col_helper} actualizada con mes_cierre={mes} -> {col_data}/{mes}*12 en {len(_PL_ROWS_HELPER)} filas.")
 
 
 def inject_estado_resultados(ws, col, periodo):
@@ -1024,7 +1055,66 @@ def repair_dupont(wb):
                 )
 
 
-def repair_wacc(wb):
+def _load_wacc_market_data(sector_name):
+    """
+    Lee los JSONs de mercado y devuelve los valores listos para inyectar en WACC.
+    Retorna dict con claves: beta, de_ratio, rf, erp, riesgo_pais.
+    Si falla algun JSON usa el valor hardcodeado como fallback.
+    """
+    base = os.path.dirname(os.path.abspath(__file__))
+
+    # --- betasBySector ---
+    beta = None
+    de_ratio = None
+    if sector_name:
+        try:
+            with open(os.path.join(base, "betasBySector.json"), encoding="utf-8") as f:
+                betas = json.load(f)
+            sectores = betas.get("data", [])
+            match = next((s for s in sectores if s["sector"].lower() == sector_name.lower()), None)
+            if match:
+                beta     = match.get("unlevered_beta")
+                de_ratio = round(match.get("de_ratio_pct", 0) / 100, 6)
+        except Exception as e:
+            print(f"AVISO: no se pudo leer betasBySector.json: {e}")
+
+    # --- us10y ---
+    rf = 0.0417
+    try:
+        with open(os.path.join(base, "us10y.json"), encoding="utf-8") as f:
+            us10y = json.load(f)
+        rf = round(us10y["ultimo"]["yield_pct"] / 100, 6)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer us10y.json: {e}")
+
+    # --- damodaran_mexico ---
+    erp = 0.0687
+    try:
+        with open(os.path.join(base, "damodaran_mexico.json"), encoding="utf-8") as f:
+            dam = json.load(f)
+        erp = dam.get("equity_risk_premium", erp)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer damodaran_mexico.json: {e}")
+
+    # --- riesgo_pais ---
+    riesgo_pais = 0.0257
+    try:
+        with open(os.path.join(base, "riesgo_pais.json"), encoding="utf-8") as f:
+            rp = json.load(f)
+        riesgo_pais = rp.get("spread_pct", riesgo_pais)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer riesgo_pais.json: {e}")
+
+    return {
+        "beta":        beta,
+        "de_ratio":    de_ratio,
+        "rf":          rf,
+        "erp":         erp,
+        "riesgo_pais": riesgo_pais,
+    }
+
+
+def repair_wacc(wb, sector_name=None):
     """
     Repara conexion de deuda/capital y limpia referencias rotas en la hoja WACC.
     """
@@ -1045,13 +1135,16 @@ def repair_wacc(wb):
     col_2024, col_2025, _, _ = _detect_datos_year_columns(ws_datos)
     print(f"DEBUG: Inyectando fórmulas en columnas {col_2024} y {col_2025}")
 
-    # Blindaje de inputs base WACC (deben coincidir con el original).
-    ws_wacc["G4"].value = 0.0417  # Risk Free Rate
-    ws_wacc["G5"].value = 0.0687  # Equity Risk Premium
-    ws_wacc["C22"].value = 0.0417
-    ws_wacc["C23"].value = 1.101955
-    ws_wacc["C24"].value = 0.0687
-    ws_wacc["C25"].value = 0.0257
+    # Inyectar datos de mercado desde JSONs
+    md = _load_wacc_market_data(sector_name)
+    ws_wacc["G4"].value = md["rf"]
+    ws_wacc["G5"].value = md["erp"]
+    ws_wacc["G6"].value = md["riesgo_pais"]
+    if md["beta"] is not None:
+        ws_wacc["G2"].value = md["beta"]
+    if md["de_ratio"] is not None:
+        ws_wacc["G3"].value = md["de_ratio"]
+    print(f"INFO: WACC mercado inyectado -> RF={md['rf']} ERP={md['erp']} RP={md['riesgo_pais']} Beta={md['beta']} D/E={md['de_ratio']}")
 
     # Detecta filas reales en 1. Datos (con fallback).
     row_deuda_cp = _find_row_by_labels(
@@ -1755,7 +1848,387 @@ def repair_resumen_final(wb):
                 )
 
 
-def inyectar_datos_financieros(json_path, template_path, output_path):
+def _clear_rows(ws, col_start, col_end, row_start, row_end, skip_row=None):
+    """Limpia celdas en el rango dado, saltando opcionalmente una fila."""
+    for r in range(row_start, row_end + 1):
+        if r == skip_row:
+            continue
+        for c in range(col_start, col_end + 1):
+            ws.cell(row=r, column=c).value = None
+
+
+def repair_industry_averages(wb, sector_name):
+    sheet_name = next((s for s in wb.sheetnames if "industry" in s.lower() and "averages" in s.lower()), None)
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja Industry Averages.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "industry_averages.json"), encoding="utf-8") as f:
+            ia_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer industry_averages.json: {e}")
+        return
+
+    match = next((s for s in ia_data.get("data", []) if s["sector"].lower() == (sector_name or "").lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en industry_averages.json.")
+        return
+
+    ws["B1"].value = ia_data.get("fecha")
+    _clear_rows(ws, 1, 10, 9, 115, skip_row=39)
+    ws["A39"].value = match["sector"]
+    ws["B39"].value = match["num_firms"]
+    ws["C39"].value = match["ev_ebitdard_pos"]
+    ws["D39"].value = match["ev_ebitda_pos"]
+    ws["E39"].value = match["ev_ebit_pos"]
+    ws["F39"].value = match["ev_ebit_at_pos"]
+    ws["G39"].value = match["ev_ebitdard_all"]
+    ws["H39"].value = match["ev_ebitda_all"]
+    ws["I39"].value = match["ev_ebit_all"]
+    ws["J39"].value = match["ev_ebit_at_all"]
+    print(f"INFO: Industry Averages actualizado -> sector='{match['sector']}'")
+
+
+def repair_multiplos_damodaran(wb, sector_name):
+    sheet_name = next((s for s in wb.sheetnames if "multiplos" in s.lower() and "damodaran" in s.lower()), None)
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja Multiplos damodaran.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "ps_multiples.json"), encoding="utf-8") as f:
+            ps_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer ps_multiples.json: {e}")
+        return
+
+    fecha_str = ps_data.get("fecha", "")
+    if fecha_str:
+        try:
+            dt = datetime.strptime(fecha_str, "%Y-%m-%d")
+            label = dt.strftime("%B %Y")
+        except ValueError:
+            label = fecha_str
+        ws["B5"].value = f"Date of Analysis: Data used is as of {label}"
+
+    if not sector_name:
+        print("AVISO: sin sector_name, solo se actualizo la fecha en Multiplos damodaran.")
+        return
+
+    match = next((s for s in ps_data.get("data", []) if s["sector"].lower() == sector_name.lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en ps_multiples.json.")
+        return
+
+    _clear_rows(ws, 1, 6, 13, 115, skip_row=42)
+    ws["A42"].value = match["sector"]
+    ws["B42"].value = match["num_firms"]
+    ws["C42"].value = match["price_sales"]
+    ws["D42"].value = match["net_margin"]
+    ws["E42"].value = match["ev_sales"]
+    ws["F42"].value = match["pretax_op_margin"]
+    print(f"INFO: Multiplos damodaran actualizado -> sector='{match['sector']}'")
+
+
+def repair_reinvestment_us(wb, sector_name):
+    sheet_name = next((s for s in wb.sheetnames if "reinvestment" in s.lower()), None)
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja reinvestment us.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "fundgr.json"), encoding="utf-8") as f:
+            fg_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer fundgr.json: {e}")
+        return
+
+    ws["B1"].value = fg_data.get("fecha")
+
+    if not sector_name:
+        print("AVISO: sin sector_name, solo se actualizo la fecha en reinvestment us.")
+        return
+
+    match = next((s for s in fg_data.get("data", []) if s["sector"].lower() == sector_name.lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en fundgr.json.")
+        return
+
+    _clear_rows(ws, 1, 5, 9, 115, skip_row=38)
+    ws["A38"].value = match["sector"]
+    ws["B38"].value = match["num_firms"]
+    ws["C38"].value = match["roe"]
+    ws["D38"].value = match["retention_ratio"]
+    ws["E38"].value = match["fundamental_growth"]
+    print(f"INFO: reinvestment us actualizado -> sector='{match['sector']}'")
+
+
+def repair_estructura_deuda(wb, sector_name):
+    sheet_name = next(
+        (s for s in wb.sheetnames if "estructura" in s.lower() and "deuda" in s.lower()),
+        None,
+    )
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja Estructura de deuda.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "wacc.json"), encoding="utf-8") as f:
+            wacc_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer wacc.json: {e}")
+        return
+
+    ws["B1"].value = wacc_data.get("fecha")
+
+    if not sector_name:
+        print("AVISO: sin sector_name, solo se actualizo la fecha en Estructura de deuda.")
+        return
+
+    match = next(
+        (s for s in wacc_data.get("data", []) if s["sector"].lower() == sector_name.lower()),
+        None,
+    )
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en wacc.json.")
+        return
+
+    # Solo limpiar columnas de inputs (A,B,C,E,F,H) — D,G,I,J,K tienen formulas en fila 49
+    for col in [1, 2, 3, 5, 6, 8]:
+        for r in range(20, 121):
+            if r == 49:
+                continue
+            ws.cell(row=r, column=col).value = None
+    ws["A49"].value = match["sector"]
+    ws["B49"].value = match["num_firms"]
+    ws["C49"].value = match["beta"]
+    ws["E49"].value = match["e_over_de"]
+    ws["F49"].value = match["std_dev"]
+    ws["H49"].value = match["tax_rate"]
+    print(f"INFO: Estructura de deuda actualizado -> sector='{match['sector']}'")
+
+
+def repair_ev_sales(wb, sector_name):
+    sheet_name = next(
+        (s for s in wb.sheetnames if s.strip().upper() == "EV SALES"),
+        None,
+    )
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja EV SALES.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "ev_sales.json"), encoding="utf-8") as f:
+            ev_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer ev_sales.json: {e}")
+        return
+
+    if not sector_name:
+        print("AVISO: sin sector_name, solo se actualizo la fecha en EV SALES.")
+        return
+
+    match = next((s for s in ev_data.get("data", []) if s["sector"].lower() == sector_name.lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en ev_sales.json.")
+        return
+
+    ws["B1"].value = ev_data.get("fecha")
+    _clear_rows(ws, 1, 6, 10, 115)
+    ws["A9"].value = match["sector"]
+    ws["B9"].value = match["num_firms"]
+    ws["C9"].value = match["price_sales"]
+    ws["D9"].value = match["net_margin"]
+    ws["E9"].value = match["ev_sales"]
+    ws["F9"].value = match["pretax_op_margin"]
+    print(f"INFO: EV SALES actualizado -> sector='{match['sector']}'")
+
+
+def repair_operating_margin(wb, sector_name):
+    sheet_name = next(
+        (s for s in wb.sheetnames if "operating" in s.lower() and "margin" in s.lower()),
+        None,
+    )
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja operating margin.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "margin.json"), encoding="utf-8") as f:
+            mg_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer margin.json: {e}")
+        return
+
+    if not sector_name:
+        print("AVISO: sin sector_name, solo se actualizo la fecha en operating margin.")
+        return
+
+    match = next((s for s in mg_data.get("data", []) if s["sector"].lower() == sector_name.lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en margin.json.")
+        return
+
+    ws["B1"].value = mg_data.get("fecha")
+    _clear_rows(ws, 1, 19, 11, 115)   # borra filas 11-115, deja fila 10
+    ws["A10"].value = match["sector"]
+    ws["B10"].value = match["num_firms"]
+    ws["C10"].value = match["gross_margin"]
+    ws["D10"].value = match["net_margin"]
+    ws["E10"].value = match["pretax_prestock_op_margin"]
+    ws["F10"].value = match["pretax_unadj_op_margin"]
+    ws["G10"].value = match["aftertax_unadj_op_margin"]
+    ws["H10"].value = match["pretax_lease_adj_margin"]
+    ws["I10"].value = match["aftertax_lease_adj_margin"]
+    ws["J10"].value = match["pretax_lease_rd_adj_margin"]
+    ws["K10"].value = match["aftertax_lease_rd_adj_margin"]
+    ws["L10"].value = match["ebitda_sales"]
+    ws["M10"].value = match["ebitdasga_sales"]
+    ws["N10"].value = match["ebitdard_sales"]
+    ws["O10"].value = match["cogs_sales"]
+    ws["P10"].value = match["rd_sales"]
+    ws["Q10"].value = match["sga_sales"]
+    ws["R10"].value = match["sbc_sales"]
+    ws["S10"].value = match["lease_sales"]
+    print(f"INFO: operating margin actualizado -> sector='{match['sector']}'")
+
+
+def repair_reinvestment_rate(wb, sector_name):
+    sheet_name = next(
+        (s for s in wb.sheetnames if "reinvestment" in s.lower() and "rate" in s.lower()),
+        None,
+    )
+    if sheet_name is None:
+        print("AVISO: no se encontro hoja Reinvestment Rate.")
+        return
+    ws = wb[sheet_name]
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "fundgrEB.json"), encoding="utf-8") as f:
+            eb_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer fundgrEB.json: {e}")
+        return
+
+    if not sector_name:
+        print("AVISO: sin sector_name, solo se actualizo la fecha en Reinvestment Rate.")
+        return
+
+    match = next((s for s in eb_data.get("data", []) if s["sector"].lower() == sector_name.lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en fundgrEB.json.")
+        return
+
+    ws["B1"].value = eb_data.get("fecha_scrape")
+    _clear_rows(ws, 1, 5, 10, 115)   # borra filas 10-115, deja fila 9
+    ws["A9"].value = match["sector"]
+    ws["B9"].value = match["num_firms"]
+    ws["C9"].value = match["roc"]
+    ws["D9"].value = match["reinvestment_rate"]
+    ws["E9"].value = match["expected_growth_ebit"]
+    print(f"INFO: Reinvestment Rate actualizado -> sector='{match['sector']}'")
+
+
+def repair_betas_2025(wb, sector_name):
+    """
+    Llena 'Betas 2025' fila 11 con datos de betasBySector.json segun el sector.
+      A11: nombre del sector
+      B11:K11: num_firms, beta, de_ratio_pct, tax_rate_pct, unlevered_beta,
+               cash_firm_value_pct, unlevered_beta_cash_adj, hilo_risk,
+               std_dev_equity_pct, None
+    """
+    ws = wb["Betas 2025"] if "Betas 2025" in wb.sheetnames else None
+    if ws is None:
+        print("AVISO: no se encontro hoja 'Betas 2025'.")
+        return
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "betasBySector.json"), encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer betasBySector.json: {e}")
+        return
+
+    sectores = data.get("data", [])
+    match = next((s for s in sectores if s["sector"].lower() == (sector_name or "").lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en betasBySector.json.")
+        return
+
+    ws["A11"].value = match["sector"]
+    ws["B11"].value = match["num_firms"]
+    ws["C11"].value = match["beta"]
+    ws["D11"].value = match["de_ratio_pct"]
+    ws["E11"].value = match["tax_rate_pct"]
+    ws["F11"].value = match["unlevered_beta"]
+    ws["G11"].value = match["cash_firm_value_pct"]
+    ws["H11"].value = match["unlevered_beta_cash_adj"]
+    ws["I11"].value = match["hilo_risk"]
+    ws["J11"].value = match["std_dev_equity_pct"]
+    ws["K11"].value = None
+
+    print(f"INFO: Betas 2025 actualizado -> sector='{match['sector']}'")
+
+
+def repair_expected_growth(wb, sector_name):
+    """
+    Renombra 'Expected Growth25' -> 'Expected Growth26' y actualiza:
+      B1    : fecha del scrape
+      A9   : nombre del sector
+      B9:G9EL : los 6 valores del sector desde damodaran_growth.json
+    """
+    old_name = next((s for s in wb.sheetnames if "expected" in s.lower() and "growth" in s.lower()), None)
+    if old_name is None:
+        print("AVISO: no se encontro hoja Expected Growth.")
+        return
+    ws = wb[old_name]
+
+    # Leer JSON
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, "damodaran_growth.json"), encoding="utf-8") as f:
+            growth_data = json.load(f)
+    except Exception as e:
+        print(f"AVISO: no se pudo leer damodaran_growth.json: {e}")
+        return
+
+    fecha_scrape = growth_data.get("fecha_scrape", datetime.now().strftime("%Y-%m-%d"))
+    sectores = growth_data.get("data", [])
+
+    match = next((s for s in sectores if s["sector"].lower() == (sector_name or "").lower()), None)
+    if match is None:
+        print(f"AVISO: sector '{sector_name}' no encontrado en damodaran_growth.json.")
+        return
+
+    ws["B1"].value = fecha_scrape
+    _clear_rows(ws, 1, 7, 9, 115, skip_row=38)
+    ws["A9"].value = match["sector"]
+    ws["B9"].value = match["num_firms"]
+    ws["C9"].value = match["cagr_net_income_5y"]
+    ws["D9"].value = match["cagr_revenues_5y"]
+    ws["E9"].value = match["exp_growth_rev_2y"]
+    ws["F9"].value = match["exp_growth_rev_5y"]
+    ws["G9"].value = match["exp_growth_eps_5y"]
+
+    print(f"INFO: Expected Growth actualizado -> sector='{match['sector']}' fecha={fecha_scrape}")
+
+
+def inyectar_datos_financieros(json_path, template_path, output_path, sector_name=None):
     with open(json_path, encoding="utf-8-sig") as f:
         data = json.load(f)
 
@@ -1809,14 +2282,56 @@ def inyectar_datos_financieros(json_path, template_path, output_path):
 
     enforce_core_subtotals(ws, mapped_cols)
 
+    # Actualizar col L con mes_cierre real del ultimo periodo parcial
+    for periodo in periodos:
+        if str(periodo.get("tipo_periodo", "")).upper() == "PARCIAL":
+            inject_col_l_annualization(ws, periodo.get("mes_cierre"))
+            break  # solo aplica al parcial (normalmente 2025)
+
+    is_2025_anual_cerrado = any(
+        int(to_float(p.get("anio"))) == 2025 and str(p.get("tipo_periodo", "")).upper() == "ANUAL_CERRADO"
+        for p in periodos
+    )
+
+    if is_2025_anual_cerrado:
+        col_k = "K"
+        col_j = "J"
+        # Hacer que K coincida exactamente con J
+        for r in range(5, 140):
+            if ws[f"{col_j}{r}"].value is not None:
+                ws[f"{col_k}{r}"].value = f"={col_j}{r}"
+        
+        # Ocultar K y L
+        ws.column_dimensions['K'].hidden = True
+        ws.column_dimensions['L'].hidden = True
+
     repair_calculos_2(wb)
     repair_resumen_escenario(wb)
     repair_dupont(wb)
-    repair_wacc(wb)
+    repair_wacc(wb, sector_name=sector_name)
+    repair_betas_2025(wb, sector_name)
+    repair_expected_growth(wb, sector_name)
+    repair_industry_averages(wb, sector_name)
+    repair_multiplos_damodaran(wb, sector_name)
+    repair_reinvestment_us(wb, sector_name)
+    repair_estructura_deuda(wb, sector_name)
+    repair_ev_sales(wb, sector_name)
+    repair_operating_margin(wb, sector_name)
+    repair_reinvestment_rate(wb, sector_name)
     repair_razones_financieras(wb)
     repair_resumen_final(wb)
     repair_company_name_placeholders(wb, empresa)
 
+    scraper_us10y.main()
+    scraper_riesgo_pais.main()
+    scraper_damodaran_mexico.main()
+    scraper_damodaran_growth.main()
+    parse_ps_multiples.main()
+    parse_fundgr.main()
+    parse_wacc.main()
+    parse_ev_sales.main()
+    parse_margin.main()
+    scraper_fundgrEB.main()
     wb.save(output_path)
     try:
         check_wb = openpyxl.load_workbook(output_path, data_only=False, read_only=True)
